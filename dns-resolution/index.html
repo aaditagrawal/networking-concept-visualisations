@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recursive vs Iterative DNS Resolution</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Commit+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0c0c0c;
+      --bg-panel: #0f0f0f;
+      --bg-panel-alt: #131313;
+      --fg: #d4d4d4;
+      --dim: #525252;
+      --dimmer: #333;
+      --accent: #fff;
+      --line: #252525;
+      --query-color: #6bb3e0;
+      --referral-color: #e0a86b;
+      --answer-color: #7de07d;
+      --cname-color: #c89de0;
+      --error-color: #e06b6b;
+    }
+
+    [data-theme="light"] {
+      --bg: #f5f5f5;
+      --bg-panel: #ffffff;
+      --bg-panel-alt: #fafafa;
+      --fg: #262626;
+      --dim: #737373;
+      --dimmer: #d4d4d4;
+      --accent: #000;
+      --line: #e5e5e5;
+      --query-color: #2878a8;
+      --referral-color: #b07830;
+      --answer-color: #2a8a2a;
+      --cname-color: #7b3e9e;
+      --error-color: #c03030;
+    }
+
+    body {
+      font-family: 'Commit Mono', 'SF Mono', 'Monaco', monospace;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      padding: 3rem 2rem;
+      line-height: 1.5;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .container { max-width: 1800px; margin: 0 auto; }
+
+    header { text-align: center; margin-bottom: 3rem; position: relative; }
+
+    .theme-toggle {
+      position: absolute; top: 0; right: 0;
+      display: flex; align-items: center; gap: 0.75rem;
+      font-size: 0.6875rem; color: var(--dim);
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .theme-toggle button {
+      background: transparent; border: 1px solid var(--line); color: var(--fg);
+      padding: 0.5rem 0.75rem; font-family: inherit; font-size: 0.625rem;
+      cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.2s;
+    }
+    .theme-toggle button:hover { border-color: var(--dim); }
+    .theme-toggle button.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+    h1 {
+      font-size: 1.25rem; font-weight: 400; letter-spacing: 0.15em;
+      text-transform: uppercase; margin-bottom: 0.75rem; color: var(--accent);
+    }
+    .subtitle { color: var(--dim); font-size: 0.8125rem; letter-spacing: 0.05em; }
+
+    .controls {
+      display: flex; gap: 2rem; justify-content: center;
+      align-items: flex-end; margin-bottom: 2.5rem; flex-wrap: wrap;
+    }
+    .control-group { display: flex; flex-direction: column; gap: 0.625rem; }
+
+    label { font-size: 0.6875rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.15em; }
+
+    input, select {
+      font-family: inherit; font-size: 0.9375rem; padding: 0.875rem 1.25rem;
+      background: var(--bg); border: 1px solid var(--line); color: var(--fg);
+      outline: none; transition: border-color 0.3s, background 0.3s;
+    }
+    input:focus, select:focus { border-color: var(--dim); }
+    [data-theme="light"] input:focus, [data-theme="light"] select:focus { background: #fff; }
+    select { cursor: pointer; appearance: none; padding-right: 2rem; }
+    input[type="text"] { width: 300px; }
+
+    button.primary {
+      font-family: inherit; font-size: 0.75rem; padding: 0.875rem 2.5rem;
+      background: var(--fg); color: var(--bg); border: none; cursor: pointer;
+      text-transform: uppercase; letter-spacing: 0.2em; transition: all 0.3s; font-weight: 700;
+    }
+    button.primary:hover { background: var(--accent); }
+    button.primary:disabled { opacity: 0.2; cursor: not-allowed; }
+
+    /* Banner */
+    .real-dns-banner {
+      text-align: center; margin-bottom: 2.5rem; padding: 1.25rem 2rem;
+      border: 1px solid var(--line); background: var(--bg-panel);
+      min-height: 3.5rem; transition: all 0.3s;
+    }
+    .real-dns-banner.has-data { border-color: var(--answer-color); }
+    .real-dns-banner.has-error { border-color: var(--error-color); }
+    .banner-label { font-size: 0.5625rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 0.5rem; }
+    .banner-result { font-size: 0.875rem; color: var(--fg); word-break: break-all; }
+    .banner-result .record-type { color: var(--dim); font-size: 0.6875rem; margin-right: 0.25rem; }
+    .banner-result .record-value { color: var(--answer-color); font-weight: 700; }
+    .banner-result .record-ttl { color: var(--dim); font-size: 0.625rem; margin-left: 0.75rem; }
+    .banner-result .cname-chain { color: var(--cname-color); }
+    .banner-result .error-text { color: var(--error-color); }
+    .banner-details { margin-top: 0.75rem; display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap; }
+    .banner-detail { font-size: 0.5625rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; }
+    .banner-detail span { color: var(--fg); font-weight: 700; text-transform: none; }
+
+    /* Hierarchy */
+    .domain-hierarchy {
+      display: flex; justify-content: center; gap: 0; margin-bottom: 2.5rem;
+      flex-wrap: wrap; align-items: stretch; min-height: 3.5rem;
+    }
+    .hierarchy-node {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 0.5rem 1rem; border: 1px solid var(--line);
+      background: var(--bg-panel); opacity: 0; transition: opacity 0.4s; min-width: 100px;
+    }
+    .hierarchy-node.visible { opacity: 1; }
+    .hierarchy-node-zone { font-size: 0.75rem; font-weight: 700; color: var(--accent); margin-bottom: 0.25rem; }
+    .hierarchy-node-ns {
+      font-size: 0.5rem; color: var(--dim); text-align: center; letter-spacing: 0.05em;
+      max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .hierarchy-arrow {
+      display: flex; align-items: center; color: var(--dimmer);
+      font-size: 1rem; padding: 0 0.25rem; opacity: 0; transition: opacity 0.4s;
+    }
+    .hierarchy-arrow.visible { opacity: 1; }
+
+    /* Panels */
+    .visualizations { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+    .viz-panel {
+      background: var(--bg-panel); border: 1px solid var(--line); padding: 2rem;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .viz-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--line);
+    }
+    .viz-title { font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: var(--accent); }
+    .viz-mode { font-size: 0.6875rem; color: var(--dim); margin-top: 0.375rem; letter-spacing: 0.1em; }
+    .viz-behavior { font-size: 0.6875rem; color: var(--dim); text-align: right; letter-spacing: 0.05em; max-width: 220px; }
+
+    /* Diagram */
+    .diagram-container { position: relative; height: 780px; overflow: hidden; }
+    .diagram { position: relative; width: 100%; height: 100%; }
+
+    .endpoint-line { position: absolute; top: 48px; bottom: 0; width: 1px; background: var(--dimmer); }
+    .endpoint-label {
+      position: absolute; top: 0; transform: translateX(-50%);
+      font-size: 0.5625rem; color: var(--dim); text-transform: uppercase;
+      letter-spacing: 0.12em; white-space: nowrap; text-align: center; line-height: 1.3;
+    }
+    .endpoint-sublabel {
+      display: block; font-size: 0.4375rem; color: var(--dimmer);
+      letter-spacing: 0.08em; margin-top: 1px; max-width: 100px;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+
+    svg.packet-line { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+
+    .packet-arrow { stroke-width: 1.5; fill: none; opacity: 0; }
+    .packet-arrow.query { stroke: var(--query-color); }
+    .packet-arrow.referral { stroke: var(--referral-color); stroke-dasharray: 5 3; }
+    .packet-arrow.answer { stroke: var(--answer-color); }
+    .packet-arrow.cname { stroke: var(--cname-color); stroke-dasharray: 3 2; }
+    .packet-arrow.visible { opacity: 1; }
+
+    .packet-label {
+      font-size: 8px; font-family: 'Commit Mono', monospace;
+      opacity: 0; transition: opacity 0.3s; font-weight: 700;
+    }
+    .packet-label.query { fill: var(--query-color); }
+    .packet-label.referral { fill: var(--referral-color); font-size: 7px; font-weight: 400; }
+    .packet-label.answer { fill: var(--answer-color); }
+    .packet-label.cname { fill: var(--cname-color); font-size: 7px; }
+    .packet-label.visible { opacity: 1; }
+
+    .packet-sublabel {
+      font-size: 6.5px; font-family: 'Commit Mono', monospace;
+      opacity: 0; transition: opacity 0.3s; fill: var(--dim);
+    }
+    .packet-sublabel.visible { opacity: 1; }
+
+    .step-marker {
+      position: absolute; left: 2px; transform: translateY(-50%);
+      width: 16px; height: 16px; border-radius: 50%;
+      border: 1px solid var(--dimmer); display: flex; align-items: center;
+      justify-content: center; font-size: 0.4375rem; color: var(--dim);
+      opacity: 0; transition: opacity 0.3s; background: var(--bg-panel);
+    }
+    .step-marker.visible { opacity: 1; }
+
+    .result-box {
+      position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+      padding: 0.5rem 1.25rem; border: 1px solid var(--answer-color);
+      font-size: 0.6875rem; color: var(--answer-color);
+      opacity: 0; transition: opacity 0.4s; white-space: nowrap;
+      text-align: center; background: var(--bg-panel);
+    }
+    .result-box.visible { opacity: 1; }
+    .result-box .result-ttl { font-size: 0.5rem; color: var(--dim); display: block; margin-top: 2px; }
+
+    /* Stats */
+    .stats {
+      margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; text-align: center;
+    }
+    .stat { display: flex; flex-direction: column; gap: 0.375rem; }
+    .stat-value { font-size: 1.5rem; font-weight: 400; color: var(--accent); letter-spacing: 0.05em; }
+    .stat-label { font-size: 0.5rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.15em; }
+
+    /* Log */
+    .dns-log { margin-top: 1.25rem; border-top: 1px solid var(--line); padding-top: 1rem; max-height: 220px; overflow-y: auto; }
+    .dns-log-title { font-size: 0.5625rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 0.625rem; }
+    .log-entry {
+      font-size: 0.625rem; color: var(--dim); padding: 0.25rem 0;
+      border-bottom: 1px solid var(--line); display: flex; gap: 0.75rem;
+      align-items: baseline; opacity: 0; transition: opacity 0.3s;
+    }
+    .log-entry.visible { opacity: 1; }
+    .log-step { color: var(--dimmer); min-width: 20px; text-align: right; flex-shrink: 0; }
+    .log-direction { min-width: 14px; text-align: center; flex-shrink: 0; }
+    .log-direction.outbound { color: var(--query-color); }
+    .log-direction.inbound { color: var(--referral-color); }
+    .log-direction.final { color: var(--answer-color); }
+    .log-msg { color: var(--fg); flex: 1; }
+    .log-msg .log-type { color: var(--dim); font-size: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; margin-right: 0.25rem; }
+    .log-msg .log-server { color: var(--query-color); }
+    .log-msg .log-ns { color: var(--referral-color); }
+    .log-msg .log-ip { color: var(--answer-color); }
+    .log-msg .log-ttl { color: var(--dim); font-size: 0.5rem; margin-left: 0.5rem; }
+    .log-msg .log-cname { color: var(--cname-color); }
+    .log-msg .log-flags { color: var(--dimmer); font-size: 0.5rem; }
+
+    /* Legend */
+    .legend {
+      display: flex; justify-content: center; gap: 2.5rem; margin-top: 3rem;
+      padding-top: 2rem; border-top: 1px solid var(--line); flex-wrap: wrap;
+    }
+    .legend-item { display: flex; align-items: center; gap: 0.75rem; font-size: 0.6875rem; color: var(--dim); }
+    .legend-line { width: 30px; height: 2px; }
+    .legend-line.query { background: var(--query-color); }
+    .legend-line.referral { background: repeating-linear-gradient(90deg, var(--referral-color) 0px, var(--referral-color) 5px, transparent 5px, transparent 8px); }
+    .legend-line.answer { background: var(--answer-color); }
+    .legend-line.cname { background: repeating-linear-gradient(90deg, var(--cname-color) 0px, var(--cname-color) 3px, transparent 3px, transparent 5px); }
+
+    .dns-log::-webkit-scrollbar { width: 4px; }
+    .dns-log::-webkit-scrollbar-track { background: var(--bg-panel); }
+    .dns-log::-webkit-scrollbar-thumb { background: var(--dimmer); }
+
+    @media (max-width: 1200px) { .visualizations { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="theme-toggle">
+        <span>Theme</span>
+        <button id="darkBtn" class="active">Dark</button>
+        <button id="lightBtn">Light</button>
+      </div>
+      <h1>Recursive vs Iterative DNS</h1>
+      <p class="subtitle">Two strategies for resolving domain names through the DNS hierarchy</p>
+    </header>
+
+    <div class="controls">
+      <div class="control-group">
+        <label for="domain">Domain Name</label>
+        <input type="text" id="domain" value="www.github.com" placeholder="Enter any domain...">
+      </div>
+      <div class="control-group">
+        <label for="queryType">Record Type</label>
+        <select id="queryType">
+          <option value="A" selected>A (IPv4)</option>
+          <option value="AAAA">AAAA (IPv6)</option>
+          <option value="MX">MX (Mail)</option>
+          <option value="TXT">TXT</option>
+          <option value="CNAME">CNAME</option>
+          <option value="NS">NS</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="animSpeed">Animation</label>
+        <select id="animSpeed">
+          <option value="4">Slow</option>
+          <option value="2.5" selected>Normal</option>
+          <option value="1.2">Fast</option>
+          <option value="0.4">Instant</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <button class="primary" id="startBtn">Resolve</button>
+      </div>
+    </div>
+
+    <div class="real-dns-banner" id="dnsBanner">
+      <div class="banner-label">DNS Result</div>
+      <div class="banner-result" id="bannerResult">Enter a domain and click Resolve</div>
+    </div>
+
+    <div class="domain-hierarchy" id="domainHierarchy"></div>
+
+    <div class="visualizations">
+      <!-- Recursive panel -->
+      <div class="viz-panel">
+        <div class="viz-header">
+          <div>
+            <div class="viz-title">Recursive</div>
+            <div class="viz-mode">Query is forwarded through a chain</div>
+          </div>
+          <div class="viz-behavior">Each server forwards the query to the next and waits. The answer cascades back.</div>
+        </div>
+        <div class="diagram-container">
+          <div class="diagram" id="recDiagram">
+            <svg class="packet-line" id="recSvg">
+              <defs>
+                <marker id="ah-query-rec" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-query" /></marker>
+                <marker id="ah-referral-rec" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><polygon points="0 0, 5 2.5, 0 5" class="af-referral" /></marker>
+                <marker id="ah-answer-rec" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-answer" /></marker>
+                <marker id="ah-cname-rec" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><polygon points="0 0, 5 2.5, 0 5" class="af-cname" /></marker>
+              </defs>
+            </svg>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="stat-value" id="recMsgs">0</div><div class="stat-label">Total Messages</div></div>
+          <div class="stat"><div class="stat-value" id="recHops">0</div><div class="stat-label">Forward Hops</div></div>
+          <div class="stat"><div class="stat-value" id="recServers">0</div><div class="stat-label">Servers Involved</div></div>
+          <div class="stat"><div class="stat-value" id="recClientMsgs">0</div><div class="stat-label">Client Sends</div></div>
+        </div>
+        <div class="dns-log" id="recLog"><div class="dns-log-title">Resolution Trace</div></div>
+      </div>
+
+      <!-- Iterative panel -->
+      <div class="viz-panel">
+        <div class="viz-header">
+          <div>
+            <div class="viz-title">Iterative</div>
+            <div class="viz-mode">Resolver queries each server itself</div>
+          </div>
+          <div class="viz-behavior">Each server returns the best it knows. The resolver follows referrals and re-queries.</div>
+        </div>
+        <div class="diagram-container">
+          <div class="diagram" id="iterDiagram">
+            <svg class="packet-line" id="iterSvg">
+              <defs>
+                <marker id="ah-query-iter" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-query" /></marker>
+                <marker id="ah-referral-iter" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><polygon points="0 0, 5 2.5, 0 5" class="af-referral" /></marker>
+                <marker id="ah-answer-iter" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-answer" /></marker>
+                <marker id="ah-cname-iter" markerWidth="5" markerHeight="5" refX="4" refY="2.5" orient="auto"><polygon points="0 0, 5 2.5, 0 5" class="af-cname" /></marker>
+              </defs>
+            </svg>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="stat-value" id="iterMsgs">0</div><div class="stat-label">Total Messages</div></div>
+          <div class="stat"><div class="stat-value" id="iterRoundTrips">0</div><div class="stat-label">Round Trips</div></div>
+          <div class="stat"><div class="stat-value" id="iterServers">0</div><div class="stat-label">Servers Queried</div></div>
+          <div class="stat"><div class="stat-value" id="iterResolverSends">0</div><div class="stat-label">Resolver Sends</div></div>
+        </div>
+        <div class="dns-log" id="iterLog"><div class="dns-log-title">Resolution Trace</div></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-line query"></div><span>DNS Query (forwarded)</span></div>
+      <div class="legend-item"><div class="legend-line referral"></div><span>Referral / "try this server"</span></div>
+      <div class="legend-item"><div class="legend-line answer"></div><span>Answer</span></div>
+      <div class="legend-item"><div class="legend-line cname"></div><span>CNAME Redirect</span></div>
+    </div>
+  </div>
+
+  <script>
+    const state = { running: false, animationSpeed: 2.5 };
+
+    // ── Theme ──
+    function setTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      localStorage.setItem('dns-viz-theme', t);
+      document.getElementById('darkBtn').classList.toggle('active', t === 'dark');
+      document.getElementById('lightBtn').classList.toggle('active', t === 'light');
+      updateArrowColors();
+    }
+    function updateArrowColors() {
+      const s = getComputedStyle(document.documentElement);
+      document.querySelectorAll('.af-query').forEach(el => el.setAttribute('fill', s.getPropertyValue('--query-color').trim()));
+      document.querySelectorAll('.af-referral').forEach(el => el.setAttribute('fill', s.getPropertyValue('--referral-color').trim()));
+      document.querySelectorAll('.af-answer').forEach(el => el.setAttribute('fill', s.getPropertyValue('--answer-color').trim()));
+      document.querySelectorAll('.af-cname').forEach(el => el.setAttribute('fill', s.getPropertyValue('--cname-color').trim()));
+    }
+    document.getElementById('darkBtn').addEventListener('click', () => setTheme('dark'));
+    document.getElementById('lightBtn').addEventListener('click', () => setTheme('light'));
+    setTheme(localStorage.getItem('dns-viz-theme') || 'dark');
+    document.getElementById('animSpeed').addEventListener('change', e => { state.animationSpeed = parseFloat(e.target.value); });
+
+    // ── DoH ──
+    const DOH = 'https://dns.google/resolve';
+    async function doh(name, type = 'A') {
+      const r = await fetch(`${DOH}?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`);
+      if (!r.ok) throw new Error(`DoH failed: ${r.status}`);
+      return r.json();
+    }
+    const RCODES = { 0:'NOERROR',1:'FORMERR',2:'SERVFAIL',3:'NXDOMAIN',4:'NOTIMP',5:'REFUSED' };
+    const QTYPES = { 1:'A',2:'NS',5:'CNAME',6:'SOA',15:'MX',16:'TXT',28:'AAAA',33:'SRV',257:'CAA' };
+    function qtypeName(n) { return QTYPES[n] || `TYPE${n}`; }
+    function rcodeName(n) { return RCODES[n] || `RCODE${n}`; }
+
+    // ── Gather real DNS data ──
+    async function gatherDNS(domain, qtype) {
+      const d = {
+        domain, qtype,
+        rootServers: ['a.root-servers.net','b.root-servers.net','c.root-servers.net'],
+        tld: null, tldServers: [],
+        authZone: null, authServers: [],
+        cnameChain: [], cnameIsSameZone: false,
+        finalAnswer: null, finalRecords: [],
+        rcode: 0, flags: {}, error: null,
+      };
+      try {
+        const labels = domain.replace(/\.$/, '').toLowerCase().split('.');
+        d.tld = labels[labels.length - 1];
+
+        // TLD nameservers
+        const tldNs = await doh(d.tld, 'NS');
+        if (tldNs.Answer) d.tldServers = tldNs.Answer.filter(r => r.type === 2).map(r => r.data.replace(/\.$/, '')).slice(0, 4);
+        if (!d.tldServers.length) d.tldServers = [`ns1.dns.${d.tld}`];
+
+        // Auth zone
+        let authZone = labels.length >= 2 ? labels.slice(-2).join('.') : domain;
+        const multiTlds = ['co.uk','com.au','co.jp','org.uk','ac.uk','gov.uk','co.nz','com.br','co.in'];
+        if (labels.length >= 3 && multiTlds.includes(labels.slice(-2).join('.'))) {
+          d.tld = labels.slice(-2).join('.');
+          authZone = labels.slice(-3).join('.');
+          const t2 = await doh(d.tld, 'NS');
+          if (t2.Answer) d.tldServers = t2.Answer.filter(r => r.type === 2).map(r => r.data.replace(/\.$/, '')).slice(0, 4);
+        }
+        d.authZone = authZone;
+
+        // Auth nameservers
+        const aNs = await doh(authZone, 'NS');
+        if (aNs.Answer) d.authServers = aNs.Answer.filter(r => r.type === 2).map(r => r.data.replace(/\.$/, '')).slice(0, 4);
+        if (!d.authServers.length && aNs.Authority) d.authServers = aNs.Authority.filter(r => r.type === 2).map(r => r.data.replace(/\.$/, '')).slice(0, 4);
+        if (!d.authServers.length) d.authServers = [`ns1.${authZone}`];
+
+        // Actual query
+        const res = await doh(domain, qtype);
+        d.rcode = res.Status;
+        d.flags = { rd: res.RD, ra: res.RA, ad: res.AD, cd: res.CD, tc: res.TC };
+
+        if (res.Answer) {
+          for (const rec of res.Answer) {
+            if (rec.type === 5) {
+              d.cnameChain.push({ name: rec.name.replace(/\.$/, ''), target: rec.data.replace(/\.$/, ''), ttl: rec.TTL });
+            } else {
+              d.finalRecords.push({ name: rec.name.replace(/\.$/, ''), type: qtypeName(rec.type), data: rec.data.replace(/\.$/, ''), ttl: rec.TTL });
+            }
+          }
+          if (d.finalRecords.length) d.finalAnswer = d.finalRecords[0];
+          else if (d.cnameChain.length) d.finalAnswer = { name: d.cnameChain[0].name, type: 'CNAME', data: d.cnameChain[d.cnameChain.length - 1].target, ttl: d.cnameChain[0].ttl };
+        }
+
+        if (d.cnameChain.length && d.authZone) {
+          const target = d.cnameChain[d.cnameChain.length - 1].target;
+          d.cnameIsSameZone = target === d.authZone || target.endsWith('.' + d.authZone);
+        }
+
+        if (res.Status !== 0 && !d.finalAnswer) d.error = rcodeName(res.Status);
+      } catch (e) { d.error = e.message; }
+      return d;
+    }
+
+    // ── Drawing helpers ──
+    function clearDiagram(dId, sId) {
+      document.getElementById(sId).querySelectorAll('line, text, polygon:not(marker polygon)').forEach(e => e.remove());
+      document.getElementById(dId).querySelectorAll('.endpoint-line, .endpoint-label, .step-marker, .result-box').forEach(e => e.remove());
+    }
+    function clearLog(id) { document.getElementById(id).querySelectorAll('.log-entry').forEach(e => e.remove()); }
+
+    function addLog(logId, step, dir, html) {
+      const log = document.getElementById(logId);
+      const e = document.createElement('div');
+      e.className = 'log-entry';
+      const dc = dir === 'out' ? 'outbound' : dir === 'answer' ? 'final' : 'inbound';
+      const da = dir === 'out' ? '\u2192' : '\u2190';
+      e.innerHTML = `<span class="log-step">${step}</span><span class="log-direction ${dc}">${da}</span><span class="log-msg">${html}</span>`;
+      log.appendChild(e);
+      requestAnimationFrame(() => e.classList.add('visible'));
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function mkEndpoint(diagram, xPct, name, sub) {
+      const l = document.createElement('div'); l.className = 'endpoint-line'; l.style.left = xPct + '%'; diagram.appendChild(l);
+      const lb = document.createElement('div'); lb.className = 'endpoint-label'; lb.style.left = xPct + '%';
+      lb.innerHTML = name + (sub ? `<span class="endpoint-sublabel">${sub}</span>` : ''); diagram.appendChild(lb);
+    }
+
+    function mkStep(diagram, y, n) {
+      const m = document.createElement('div'); m.className = 'step-marker'; m.style.top = y + 'px'; m.textContent = n; diagram.appendChild(m); return m;
+    }
+
+    function mkResult(diagram, main, sub) {
+      const b = document.createElement('div'); b.className = 'result-box';
+      b.innerHTML = main + (sub ? `<span class="result-ttl">${sub}</span>` : ''); diagram.appendChild(b); return b;
+    }
+
+    function drawArrow(svg, x1, y1, x2, y2, label, sublabel, type, suffix) {
+      const s = getComputedStyle(document.documentElement);
+      const c = { query: '--query-color', referral: '--referral-color', answer: '--answer-color', cname: '--cname-color' };
+      const color = s.getPropertyValue(c[type]).trim();
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+      line.setAttribute('x2', x1); line.setAttribute('y2', y1);
+      line.setAttribute('class', `packet-arrow ${type}`);
+      line.setAttribute('stroke', color);
+      line.setAttribute('marker-end', `url(#ah-${type}-${suffix})`);
+      svg.appendChild(line);
+
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      txt.setAttribute('x', mx); txt.setAttribute('y', my - 8);
+      txt.setAttribute('text-anchor', 'middle');
+      txt.setAttribute('class', `packet-label ${type}`);
+      txt.setAttribute('fill', color); txt.textContent = label; svg.appendChild(txt);
+
+      let stxt = null;
+      if (sublabel) {
+        stxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        stxt.setAttribute('x', mx); stxt.setAttribute('y', my + 5);
+        stxt.setAttribute('text-anchor', 'middle'); stxt.setAttribute('class', 'packet-sublabel');
+        stxt.textContent = sublabel; svg.appendChild(stxt);
+      }
+      return { line, txt, stxt };
+    }
+
+    async function animArrow(l, t, s, x1, y1, x2, y2, dur) {
+      return new Promise(resolve => {
+        l.classList.add('visible'); t.classList.add('visible'); if (s) s.classList.add('visible');
+        const t0 = performance.now(); dur = Math.max(dur, 16);
+        function tick(now) {
+          const p = Math.min((now - t0) / dur, 1);
+          l.setAttribute('x2', x1 + (x2 - x1) * p); l.setAttribute('y2', y1 + (y2 - y1) * p);
+          p < 1 ? requestAnimationFrame(tick) : resolve();
+        }
+        requestAnimationFrame(tick);
+      });
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms * state.animationSpeed)); }
+    function trunc(s, n) { return s.length > n ? s.substring(0, n - 1) + '\u2026' : s; }
+
+    // ── Banner + Hierarchy ──
+    function showBanner(dns) {
+      const banner = document.getElementById('dnsBanner'), result = document.getElementById('bannerResult');
+      banner.classList.remove('has-data', 'has-error');
+      if (dns.error) { banner.classList.add('has-error'); result.innerHTML = `<span class="error-text">${dns.error}</span> for ${dns.domain}`; return; }
+      banner.classList.add('has-data');
+      let h = '';
+      if (dns.cnameChain.length) h += dns.cnameChain.map(c => `<span class="cname-chain">${c.name} \u2192 CNAME \u2192 ${c.target}</span>`).join(' ') + '<br>';
+      if (dns.finalRecords.length) h += dns.finalRecords.map(r => `<span class="record-type">${r.type}</span><span class="record-value">${r.data}</span><span class="record-ttl">TTL ${r.ttl}s</span>`).join('&nbsp;&nbsp;');
+      else if (!dns.cnameChain.length) h += `<span class="error-text">${rcodeName(dns.rcode)}</span>`;
+      result.innerHTML = h;
+      let det = `<div class="banner-detail">RCODE <span>${rcodeName(dns.rcode)}</span></div>`;
+      const fl = Object.entries(dns.flags).filter(([,v]) => v).map(([k]) => k.toUpperCase());
+      if (fl.length) det += `<div class="banner-detail">FLAGS <span>${fl.join(', ')}</span></div>`;
+      det += `<div class="banner-detail">AUTH NS <span>${dns.authServers[0] || '?'}</span></div>`;
+      let dd = banner.querySelector('.banner-details');
+      if (!dd) { dd = document.createElement('div'); dd.className = 'banner-details'; banner.appendChild(dd); }
+      dd.innerHTML = det;
+    }
+
+    function showHierarchy(dns) {
+      const c = document.getElementById('domainHierarchy'); c.innerHTML = '';
+      const nodes = [
+        { zone: '.', ns: dns.rootServers[0] },
+        { zone: '.' + dns.tld, ns: dns.tldServers[0] || '?' },
+        { zone: dns.authZone, ns: dns.authServers[0] || '?' },
+      ];
+      if (dns.domain !== dns.authZone) nodes.push({ zone: dns.domain, ns: dns.finalAnswer ? dns.finalAnswer.data : '?' });
+      nodes.forEach((n, i) => {
+        if (i > 0) { const a = document.createElement('div'); a.className = 'hierarchy-arrow'; a.textContent = '\u25B6'; c.appendChild(a); setTimeout(() => a.classList.add('visible'), 80 + i * 200); }
+        const el = document.createElement('div'); el.className = 'hierarchy-node';
+        el.innerHTML = `<div class="hierarchy-node-zone">${n.zone}</div><div class="hierarchy-node-ns">${n.ns}</div>`;
+        c.appendChild(el); setTimeout(() => el.classList.add('visible'), 100 + i * 200);
+      });
+    }
+
+    // ════════════════════════════════════════════════════════
+    // RECURSIVE: Query is FORWARDED through a chain
+    //
+    //   Client ──query──> Resolver ──query──> Root ──query──> TLD ──query──> Auth
+    //   Client <──answer── Resolver <──answer── Root <──answer── TLD <──answer── Auth
+    //
+    //   Each server forwards the request to the next.
+    //   Each server waits for the response, then passes it back.
+    //   The query chains right, the answer cascades left.
+    // ════════════════════════════════════════════════════════
+    async function runRecursive(dns) {
+      const diagram = document.getElementById('recDiagram');
+      const svg = document.getElementById('recSvg');
+      clearDiagram('recDiagram', 'recSvg'); clearLog('recLog');
+
+      const hasCname = dns.cnameChain.length > 0 && !dns.cnameIsSameZone;
+
+      // Servers left to right: Client | Resolver | Root | TLD | Auth
+      const servers = [
+        { label: 'Client', sub: 'Stub Resolver', x: 6 },
+        { label: 'Resolver', sub: '8.8.8.8', x: 24 },
+        { label: 'Root', sub: trunc(dns.rootServers[0], 18), x: 44 },
+        { label: '.' + dns.tld + ' TLD', sub: trunc(dns.tldServers[0] || '?', 18), x: 64 },
+        { label: dns.authZone, sub: trunc(dns.authServers[0] || '?', 18), x: hasCname ? 80 : 88 },
+      ];
+      if (hasCname) {
+        const ct = dns.cnameChain[dns.cnameChain.length - 1].target.split('.').slice(-2).join('.');
+        servers.push({ label: ct, sub: 'CNAME target', x: 94 });
+      }
+      servers.forEach(s => mkEndpoint(diagram, s.x, s.label, s.sub));
+
+      const W = diagram.offsetWidth;
+      const xOf = i => W * (servers[i].x / 100);
+
+      // Build the forwarding chain (queries go right) and answer chain (answers come left)
+      const steps = [];
+      const q = `${dns.qtype} ${dns.domain}?`;
+
+      // ── Forward chain: each server forwards the query to the next ──
+      steps.push({ from: 0, to: 1, label: q, sub: 'RD=1 "please resolve this"', type: 'query', logDir: 'out',
+        log: `<span class="log-type">query</span> ${dns.domain} \u2192 <span class="log-server">Resolver</span> <span class="log-flags">RD=1 (recursive: "resolve this for me")</span>` });
+
+      steps.push({ from: 1, to: 2, label: q, sub: 'RD=1 forwarded', type: 'query', logDir: 'out',
+        log: `<span class="log-type">fwd</span> Resolver forwards query \u2192 <span class="log-server">${dns.rootServers[0]}</span> <span class="log-flags">RD=1 (asking Root to resolve fully)</span>` });
+
+      steps.push({ from: 2, to: 3, label: q, sub: 'RD=1 forwarded', type: 'query', logDir: 'out',
+        log: `<span class="log-type">fwd</span> Root forwards query \u2192 <span class="log-server">${dns.tldServers[0] || '?'}</span> <span class="log-flags">RD=1 (Root knows .${dns.tld} handles this)</span>` });
+
+      steps.push({ from: 3, to: 4, label: q, sub: 'RD=1 forwarded', type: 'query', logDir: 'out',
+        log: `<span class="log-type">fwd</span> TLD forwards query \u2192 <span class="log-server">${dns.authServers[0] || '?'}</span> <span class="log-flags">RD=1 (TLD knows ${dns.authZone} handles this)</span>` });
+
+      // ── Auth knows the answer (or CNAME) ──
+      if (hasCname) {
+        // Cross-zone CNAME: Auth forwards to CNAME target auth
+        const cname = dns.cnameChain[0];
+        steps.push({ from: 4, to: 5, label: `CNAME \u2192 ${trunc(cname.target, 16)}`, sub: `forwarded to target auth`, type: 'cname', logDir: 'out',
+          log: `<span class="log-type">cname</span> Auth sees CNAME ${cname.name} \u2192 <span class="log-cname">${cname.target}</span>, forwards to target authority` });
+
+        // Answer cascades back from CNAME auth
+        if (dns.finalAnswer) {
+          steps.push({ from: 5, to: 4, label: `${dns.finalAnswer.type} ${trunc(dns.finalAnswer.data, 15)}`, sub: `QR=1 AA=1 TTL ${dns.finalAnswer.ttl}s`, type: 'answer', logDir: 'answer',
+            log: `<span class="log-type">answer</span> CNAME auth \u2192 Auth: <span class="log-ip">${dns.finalAnswer.data}</span> <span class="log-ttl">TTL ${dns.finalAnswer.ttl}s</span>` });
+        }
+      }
+
+      // ── Answer cascades back through the chain ──
+      const ansLabel = dns.finalAnswer ? `${dns.finalAnswer.type} ${trunc(dns.finalAnswer.data, 15)}` : rcodeName(dns.rcode);
+      const ansSub = dns.finalAnswer ? `QR=1 AA=1 TTL ${dns.finalAnswer.ttl}s` : `QR=1 ${rcodeName(dns.rcode)}`;
+      const ansLog = dns.finalAnswer
+        ? `<span class="log-ip">${dns.finalAnswer.data}</span> <span class="log-ttl">TTL ${dns.finalAnswer.ttl}s</span>`
+        : `<span class="error-text">${rcodeName(dns.rcode)}</span>`;
+
+      const sameZoneCname = dns.cnameChain.length > 0 && dns.cnameIsSameZone;
+      const authAnswerLabel = sameZoneCname
+        ? `CNAME + ${ansLabel}`
+        : ansLabel;
+      const authAnswerSub = sameZoneCname
+        ? `same zone, both in response. ${ansSub}`
+        : ansSub;
+
+      if (!hasCname) {
+        // Auth → TLD
+        steps.push({ from: 4, to: 3, label: authAnswerLabel, sub: authAnswerSub, type: 'answer', logDir: 'answer',
+          log: `<span class="log-type">answer</span> Auth \u2192 TLD: ${ansLog} <span class="log-flags">AA=1</span>` });
+      } else if (dns.finalAnswer) {
+        // Auth (with CNAME answer) → TLD
+        steps.push({ from: 4, to: 3, label: ansLabel, sub: ansSub, type: 'answer', logDir: 'answer',
+          log: `<span class="log-type">answer</span> Auth \u2192 TLD: ${ansLog}` });
+      }
+
+      // TLD → Root
+      steps.push({ from: 3, to: 2, label: ansLabel, sub: 'QR=1 cascading back', type: 'answer', logDir: 'answer',
+        log: `<span class="log-type">answer</span> TLD \u2192 Root: ${ansLog} <span class="log-flags">(cascading back)</span>` });
+
+      // Root → Resolver
+      steps.push({ from: 2, to: 1, label: ansLabel, sub: 'QR=1 cascading back', type: 'answer', logDir: 'answer',
+        log: `<span class="log-type">answer</span> Root \u2192 Resolver: ${ansLog}` });
+
+      // Resolver → Client
+      steps.push({ from: 1, to: 0, label: ansLabel, sub: 'QR=1 RA=1', type: 'answer', logDir: 'answer',
+        log: `<span class="log-type">answer</span> Resolver \u2192 Client: ${ansLog} <span class="log-flags">RA=1 (recursion available)</span>` });
+
+      // ── Animate ──
+      const totalSteps = steps.length;
+      const H = 780, pad = 65, usable = H - pad * 2;
+      const stepH = usable / totalSteps;
+
+      let msgs = 0, hops = 0, clientSends = 0;
+      const serversInvolved = new Set();
+
+      for (let i = 0; i < steps.length; i++) {
+        const st = steps[i];
+        const y1 = pad + i * stepH, y2 = pad + (i + 1) * stepH;
+        const x1 = xOf(st.from), x2 = xOf(st.to);
+
+        const m = mkStep(diagram, (y1 + y2) / 2, i + 1);
+        await sleep(10); m.classList.add('visible');
+        addLog('recLog', i + 1, st.logDir, st.log);
+
+        const { line, txt, stxt } = drawArrow(svg, x1, y1, x2, y2, st.label, st.sub, st.type, 'rec');
+        msgs++;
+        serversInvolved.add(st.from); serversInvolved.add(st.to);
+        if (st.type === 'query' || st.type === 'cname') hops++;
+        if (st.from === 0) clientSends++;
+
+        document.getElementById('recMsgs').textContent = msgs;
+        document.getElementById('recHops').textContent = hops;
+        document.getElementById('recServers').textContent = serversInvolved.size;
+        document.getElementById('recClientMsgs').textContent = clientSends;
+
+        await animArrow(line, txt, stxt, x1, y1, x2, y2, 120 * state.animationSpeed);
+        await sleep(25);
+      }
+
+      if (dns.finalAnswer) {
+        const b = mkResult(diagram, `${dns.domain} \u2192 ${dns.finalAnswer.data}`, `TTL ${dns.finalAnswer.ttl}s | ${dns.authServers[0] || '?'}`);
+        await sleep(40); b.classList.add('visible');
+      }
+    }
+
+    // ════════════════════════════════════════════════════════
+    // ITERATIVE: Resolver queries each server, gets referrals back
+    //
+    //   Resolver ──query──> Root
+    //   Resolver <──referral── Root  ("I don't know, try .com TLD")
+    //   Resolver ──query──> TLD
+    //   Resolver <──referral── TLD   ("I don't know, try example.com auth")
+    //   Resolver ──query──> Auth
+    //   Resolver <──answer── Auth    ("here's the IP")
+    //
+    //   The resolver fans out from center. Queries go right, referrals come back.
+    //   The resolver does ALL the work, re-querying after each referral.
+    // ════════════════════════════════════════════════════════
+    async function runIterative(dns) {
+      const diagram = document.getElementById('iterDiagram');
+      const svg = document.getElementById('iterSvg');
+      clearDiagram('iterDiagram', 'iterSvg'); clearLog('iterLog');
+
+      const hasCname = dns.cnameChain.length > 0 && !dns.cnameIsSameZone;
+
+      // Resolver is on the LEFT. Servers it queries are to the RIGHT.
+      const servers = [
+        { label: 'Resolver', sub: '8.8.8.8', x: 10 },
+        { label: 'Root', sub: trunc(dns.rootServers[0], 18), x: 36 },
+        { label: '.' + dns.tld + ' TLD', sub: trunc(dns.tldServers[0] || '?', 18), x: 58 },
+        { label: dns.authZone, sub: trunc(dns.authServers[0] || '?', 18), x: hasCname ? 76 : 82 },
+      ];
+      if (hasCname) {
+        const ct = dns.cnameChain[dns.cnameChain.length - 1].target.split('.').slice(-2).join('.');
+        servers.push({ label: ct, sub: 'CNAME target', x: 94 });
+      }
+      servers.forEach(s => mkEndpoint(diagram, s.x, s.label, s.sub));
+
+      const W = diagram.offsetWidth;
+      const xOf = i => W * (servers[i].x / 100);
+
+      const q = `${dns.qtype} ${dns.domain}?`;
+      const steps = [];
+
+      // ── Resolver → Root (query) ──
+      steps.push({ from: 0, to: 1, label: q, sub: 'RD=0', type: 'query', logDir: 'out',
+        log: `<span class="log-type">query</span> ${dns.domain} \u2192 <span class="log-server">${dns.rootServers[0]}</span> <span class="log-flags">RD=0 (iterative: "tell me what you know")</span>` });
+
+      // ── Root → Resolver (referral: "try .tld") ──
+      steps.push({ from: 1, to: 0, label: `NS .${dns.tld}`, sub: `"try ${dns.tldServers[0] || '?'}"`, type: 'referral', logDir: 'in',
+        log: `<span class="log-type">referral</span> Root: "I don't know, but .${dns.tld} might" \u2192 <span class="log-ns">${dns.tldServers.slice(0,2).join(', ')}</span> <span class="log-flags">Authority section + glue A</span>` });
+
+      // ── Resolver → TLD (query) ──
+      steps.push({ from: 0, to: 2, label: q, sub: 'RD=0', type: 'query', logDir: 'out',
+        log: `<span class="log-type">query</span> ${dns.domain} \u2192 <span class="log-server">${dns.tldServers[0] || '?'}</span> <span class="log-flags">RD=0</span>` });
+
+      // ── TLD → Resolver (referral: "try auth") ──
+      steps.push({ from: 2, to: 0, label: `NS ${dns.authZone}`, sub: `"try ${dns.authServers[0] || '?'}"`, type: 'referral', logDir: 'in',
+        log: `<span class="log-type">referral</span> TLD: "I don't know, but ${dns.authZone} might" \u2192 <span class="log-ns">${dns.authServers.slice(0,2).join(', ')}</span> <span class="log-flags">Authority section + glue A</span>` });
+
+      // ── Resolver → Auth (query) ──
+      steps.push({ from: 0, to: 3, label: q, sub: 'RD=0', type: 'query', logDir: 'out',
+        log: `<span class="log-type">query</span> ${dns.domain} \u2192 <span class="log-server">${dns.authServers[0] || '?'}</span> <span class="log-flags">RD=0</span>` });
+
+      // ── Auth → Resolver (answer or CNAME) ──
+      const sameZoneCname = dns.cnameChain.length > 0 && dns.cnameIsSameZone;
+      if (sameZoneCname) {
+        const cname = dns.cnameChain[0];
+        const answerPart = dns.finalAnswer ? ` + ${dns.finalAnswer.type} ${trunc(dns.finalAnswer.data, 12)}` : '';
+        steps.push({ from: 3, to: 0, label: `CNAME ${trunc(cname.target, 12)}${answerPart}`, sub: `QR=1 AA=1 TTL ${cname.ttl}s`, type: 'answer', logDir: 'answer',
+          log: `<span class="log-type">answer</span> Auth: <span class="log-cname">CNAME ${cname.name} \u2192 ${cname.target}</span> + <span class="log-ip">${dns.finalAnswer ? dns.finalAnswer.data : '?'}</span> <span class="log-flags">AA=1 (same zone, both in Answer)</span>` });
+      } else if (hasCname) {
+        const cname = dns.cnameChain[0];
+        steps.push({ from: 3, to: 0, label: `CNAME ${trunc(cname.target, 16)}`, sub: `QR=1 AA=1 TTL ${cname.ttl}s`, type: 'cname', logDir: 'in',
+          log: `<span class="log-type">cname</span> Auth: <span class="log-cname">${cname.name} \u2192 ${cname.target}</span> <span class="log-flags">(cross-zone, must chase)</span>` });
+
+        steps.push({ from: 0, to: 4, label: `${dns.qtype} ${dns.cnameChain[dns.cnameChain.length-1].target}?`, sub: 'RD=0 (chasing CNAME)', type: 'query', logDir: 'out',
+          log: `<span class="log-type">query</span> ${dns.cnameChain[dns.cnameChain.length-1].target} \u2192 <span class="log-server">CNAME target auth</span> <span class="log-flags">RD=0 (resolver chases CNAME itself)</span>` });
+
+        if (dns.finalAnswer) {
+          steps.push({ from: 4, to: 0, label: `${dns.finalAnswer.type} ${trunc(dns.finalAnswer.data, 15)}`, sub: `QR=1 AA=1 TTL ${dns.finalAnswer.ttl}s`, type: 'answer', logDir: 'answer',
+            log: `<span class="log-type">answer</span> CNAME target auth: <span class="log-ip">${dns.finalAnswer.data}</span> <span class="log-ttl">TTL ${dns.finalAnswer.ttl}s</span> <span class="log-flags">AA=1</span>` });
+        }
+      } else if (dns.finalAnswer) {
+        steps.push({ from: 3, to: 0, label: `${dns.finalAnswer.type} ${trunc(dns.finalAnswer.data, 15)}`, sub: `QR=1 AA=1 TTL ${dns.finalAnswer.ttl}s`, type: 'answer', logDir: 'answer',
+          log: `<span class="log-type">answer</span> Auth: <span class="log-ip">${dns.finalAnswer.data}</span> <span class="log-ttl">TTL ${dns.finalAnswer.ttl}s</span> <span class="log-flags">AA=1 (authoritative answer)</span>` });
+      } else {
+        steps.push({ from: 3, to: 0, label: rcodeName(dns.rcode), sub: `QR=1 AA=1`, type: 'answer', logDir: 'answer',
+          log: `<span class="log-type">response</span> Auth: <span class="error-text">${rcodeName(dns.rcode)}</span>` });
+      }
+
+      // ── Animate ──
+      const totalSteps = steps.length;
+      const H = 780, pad = 65, usable = H - pad * 2;
+      const stepH = usable / totalSteps;
+
+      let msgs = 0, queryCount = 0, resolverSends = 0;
+      const serversQueried = new Set();
+
+      for (let i = 0; i < steps.length; i++) {
+        const st = steps[i];
+        const y1 = pad + i * stepH, y2 = pad + (i + 1) * stepH;
+        const x1 = xOf(st.from), x2 = xOf(st.to);
+
+        const m = mkStep(diagram, (y1 + y2) / 2, i + 1);
+        await sleep(10); m.classList.add('visible');
+        addLog('iterLog', i + 1, st.logDir, st.log);
+
+        const { line, txt, stxt } = drawArrow(svg, x1, y1, x2, y2, st.label, st.sub, st.type, 'iter');
+        msgs++;
+        if (st.from === 0 && st.type === 'query') { resolverSends++; serversQueried.add(st.to); }
+        if (st.type === 'query') queryCount++;
+
+        document.getElementById('iterMsgs').textContent = msgs;
+        document.getElementById('iterRoundTrips').textContent = queryCount;
+        document.getElementById('iterServers').textContent = serversQueried.size;
+        document.getElementById('iterResolverSends').textContent = resolverSends;
+
+        await animArrow(line, txt, stxt, x1, y1, x2, y2, 120 * state.animationSpeed);
+        await sleep(25);
+      }
+
+      if (dns.finalAnswer) {
+        const b = mkResult(diagram, `${dns.domain} \u2192 ${dns.finalAnswer.data}`, `TTL ${dns.finalAnswer.ttl}s | ${dns.authServers[0] || '?'}`);
+        await sleep(40); b.classList.add('visible');
+      }
+    }
+
+    // ── Main ──
+    async function start() {
+      if (state.running) return;
+      state.running = true;
+      const btn = document.getElementById('startBtn');
+      btn.disabled = true; btn.textContent = 'Querying\u2026';
+
+      const raw = document.getElementById('domain').value.trim().replace(/^(https?:\/\/)?/, '').replace(/[\/:].*$/, '').replace(/\.$/, '').toLowerCase() || 'www.github.com';
+      const qt = document.getElementById('queryType').value;
+      document.getElementById('domain').value = raw;
+
+      ['recMsgs','recHops','recServers','recClientMsgs','iterMsgs','iterRoundTrips','iterServers','iterResolverSends'].forEach(id => {
+        document.getElementById(id).textContent = '0';
+      });
+
+      btn.textContent = 'Fetching DNS\u2026';
+      const dns = await gatherDNS(raw, qt);
+      showBanner(dns); showHierarchy(dns);
+
+      btn.textContent = 'Animating\u2026';
+      await Promise.all([runRecursive(dns), runIterative(dns)]);
+
+      state.running = false; btn.disabled = false; btn.textContent = 'Resolve';
+    }
+
+    document.getElementById('startBtn').addEventListener('click', start);
+    document.addEventListener('keydown', e => { if (e.key === 'Enter' && !state.running) start(); });
+  </script>
+</body>
+</html>

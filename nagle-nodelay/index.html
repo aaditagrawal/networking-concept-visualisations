@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TCP_NODELAY vs Nagle Algorithm</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Commit+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #0c0c0c;
+      --bg-panel: #0f0f0f;
+      --fg: #d4d4d4;
+      --dim: #525252;
+      --dimmer: #333;
+      --accent: #fff;
+      --line: #252525;
+    }
+
+    [data-theme="light"] {
+      --bg: #f5f5f5;
+      --bg-panel: #ffffff;
+      --fg: #262626;
+      --dim: #737373;
+      --dimmer: #d4d4d4;
+      --accent: #000;
+      --line: #e5e5e5;
+    }
+
+    body {
+      font-family: 'Commit Mono', 'SF Mono', 'Monaco', monospace;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      padding: 3rem 2rem;
+      line-height: 1.5;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      position: relative;
+    }
+
+    .theme-toggle {
+      position: absolute;
+      top: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.6875rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .theme-toggle button {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--fg);
+      padding: 0.5rem 0.75rem;
+      font-family: inherit;
+      font-size: 0.625rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      transition: all 0.2s;
+    }
+
+    .theme-toggle button:hover {
+      border-color: var(--dim);
+    }
+
+    .theme-toggle button.active {
+      background: var(--fg);
+      color: var(--bg);
+      border-color: var(--fg);
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 400;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+      color: var(--accent);
+    }
+
+    .subtitle {
+      color: var(--dim);
+      font-size: 0.8125rem;
+      letter-spacing: 0.05em;
+    }
+
+    .controls {
+      display: flex;
+      gap: 3rem;
+      justify-content: center;
+      align-items: flex-end;
+      margin-bottom: 3rem;
+      flex-wrap: wrap;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+    }
+
+    label {
+      font-size: 0.6875rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+    }
+
+    input {
+      font-family: inherit;
+      font-size: 0.9375rem;
+      padding: 0.875rem 1.25rem;
+      background: var(--bg);
+      border: 1px solid var(--line);
+      color: var(--fg);
+      outline: none;
+      transition: border-color 0.3s, background 0.3s;
+    }
+
+    input:focus {
+      border-color: var(--dim);
+    }
+
+    [data-theme="light"] input:focus {
+      background: #fff;
+    }
+
+    input[type="text"] {
+      width: 300px;
+    }
+
+    input[type="number"] {
+      width: 140px;
+    }
+
+    button.primary {
+      font-family: inherit;
+      font-size: 0.75rem;
+      padding: 0.875rem 2.5rem;
+      background: var(--fg);
+      color: var(--bg);
+      border: none;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      transition: all 0.3s;
+      font-weight: 700;
+    }
+
+    button.primary:hover {
+      background: var(--accent);
+    }
+
+    button.primary:disabled {
+      opacity: 0.2;
+      cursor: not-allowed;
+    }
+
+    .visualizations {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+
+    .viz-panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--line);
+      padding: 2rem;
+      transition: background 0.3s, border-color 0.3s;
+    }
+
+    .viz-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .viz-title {
+      font-size: 0.8125rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--accent);
+    }
+
+    .viz-mode {
+      font-size: 0.6875rem;
+      color: var(--dim);
+      margin-top: 0.375rem;
+      letter-spacing: 0.1em;
+    }
+
+    .viz-behavior {
+      font-size: 0.6875rem;
+      color: var(--dim);
+      text-align: right;
+      letter-spacing: 0.05em;
+    }
+
+    .diagram-wrapper {
+      display: flex;
+      gap: 0;
+    }
+
+    .timeline {
+      width: 90px;
+      flex-shrink: 0;
+      position: relative;
+      border-right: 1px solid var(--line);
+      margin-right: 1rem;
+    }
+
+    .time-event {
+      position: absolute;
+      right: 0.75rem;
+      transform: translateY(-50%);
+      text-align: right;
+      opacity: 0;
+      transition: opacity 0.3s;
+      max-width: 80px;
+    }
+
+    .time-event.visible {
+      opacity: 1;
+    }
+
+    .time-event-time {
+      font-size: 0.5625rem;
+      color: var(--dim);
+      letter-spacing: 0.05em;
+    }
+
+    .time-event-char {
+      font-size: 0.6875rem;
+      color: var(--fg);
+      font-weight: 700;
+      word-break: break-all;
+      line-height: 1.2;
+    }
+
+    .diagram-container {
+      flex: 1;
+      position: relative;
+      height: 700px;
+      overflow: hidden;
+    }
+
+    .diagram {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    .endpoint-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--dimmer);
+    }
+
+    .endpoint-line.sender {
+      left: 20%;
+    }
+
+    .endpoint-line.receiver {
+      left: 80%;
+    }
+
+    .endpoint-label {
+      position: absolute;
+      top: -2rem;
+      transform: translateX(-50%);
+      font-size: 0.5625rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+    }
+
+    .endpoint-label.sender {
+      left: 20%;
+    }
+
+    .endpoint-label.receiver {
+      left: 80%;
+    }
+
+    .buffer-indicator {
+      position: absolute;
+      left: calc(20% + 12px);
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      max-width: 45%;
+    }
+
+    .buffer-indicator.visible {
+      opacity: 1;
+    }
+
+    .buffer-box {
+      display: flex;
+      align-items: center;
+      padding: 0.25rem 0.5rem;
+      border: 1px solid var(--dimmer);
+      background: var(--bg);
+      font-size: 0.625rem;
+      color: var(--fg);
+      letter-spacing: 0.05em;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .buffer-label {
+      font-size: 0.5rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      flex-shrink: 0;
+    }
+
+    .send-indicator {
+      position: absolute;
+      left: calc(20% - 55px);
+      font-size: 0.5rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      transform: translateY(-50%);
+      opacity: 0;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+    }
+
+    .send-indicator.visible {
+      opacity: 1;
+    }
+
+    svg.packet-line {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    .packet-arrow {
+      stroke: var(--fg);
+      stroke-width: 1.5;
+      fill: none;
+      opacity: 0;
+    }
+
+    .packet-arrow.ack {
+      stroke: var(--dim);
+      stroke-width: 0.75;
+      stroke-dasharray: 3 3;
+    }
+
+    .packet-arrow.visible {
+      opacity: 1;
+    }
+
+    .packet-label {
+      font-size: 11px;
+      fill: var(--fg);
+      font-family: 'Commit Mono', monospace;
+      opacity: 0;
+      transition: opacity 0.3s;
+      font-weight: 700;
+    }
+
+    .packet-label.ack {
+      fill: var(--dim);
+      font-size: 7px;
+      font-weight: 400;
+      letter-spacing: 0.05em;
+    }
+
+    .packet-label.visible {
+      opacity: 1;
+    }
+
+    .arrowhead {
+      fill: var(--fg);
+      opacity: 0;
+    }
+
+    .arrowhead.ack {
+      fill: var(--dim);
+    }
+
+    .arrowhead.visible {
+      opacity: 1;
+    }
+
+    .received-char {
+      position: absolute;
+      left: calc(80% + 15px);
+      transform: translateY(-50%);
+      font-size: 0.6875rem;
+      color: var(--fg);
+      opacity: 0;
+      transition: opacity 0.3s;
+      max-width: 80px;
+      word-break: break-all;
+      line-height: 1.2;
+      text-align: left;
+    }
+
+    .received-char.visible {
+      opacity: 1;
+    }
+
+    .stats {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1.5rem;
+      text-align: center;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
+    }
+
+    .stat-value {
+      font-size: 1.75rem;
+      font-weight: 400;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+    }
+
+    .stat-label {
+      font-size: 0.5625rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+    }
+
+    .legend {
+      display: flex;
+      justify-content: center;
+      gap: 3rem;
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.6875rem;
+      color: var(--dim);
+    }
+
+    .legend-line {
+      width: 30px;
+      height: 2px;
+      background: var(--fg);
+    }
+
+    .legend-line.ack {
+      background: repeating-linear-gradient(
+        90deg,
+        var(--dim) 0px,
+        var(--dim) 4px,
+        transparent 4px,
+        transparent 7px
+      );
+    }
+
+    @media (max-width: 1200px) {
+      .visualizations {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="theme-toggle">
+        <span>Theme</span>
+        <button id="darkBtn" class="active">Dark</button>
+        <button id="lightBtn">Light</button>
+      </div>
+      <h1>TCP_NODELAY vs Nagle Algorithm</h1>
+      <p class="subtitle">Interactive visualization of packet transmission strategies</p>
+    </header>
+
+    <div class="controls">
+      <div class="control-group">
+        <label for="message">Message</label>
+        <input type="text" id="message" value="Hello" placeholder="Enter message...">
+      </div>
+      <div class="control-group">
+        <label for="inputLatency">Input Latency (ms)</label>
+        <input type="number" id="inputLatency" value="80" min="10" max="500">
+      </div>
+      <div class="control-group">
+        <label for="rtt">Round-Trip Time (ms)</label>
+        <input type="number" id="rtt" value="200" min="20" max="1000">
+      </div>
+      <div class="control-group">
+        <button class="primary" id="startBtn">Start Simulation</button>
+      </div>
+    </div>
+
+    <div class="visualizations">
+      <div class="viz-panel" id="nodelayPanel">
+        <div class="viz-header">
+          <div>
+            <div class="viz-title">TCP_NODELAY = 1</div>
+            <div class="viz-mode">Nagle Algorithm Disabled</div>
+          </div>
+          <div class="viz-behavior">Immediate transmission</div>
+        </div>
+        <div class="diagram-wrapper">
+          <div class="timeline" id="nodelayTimeline"></div>
+          <div class="diagram-container">
+            <div class="diagram" id="nodelayDiagram">
+              <div class="endpoint-label sender">Sender</div>
+              <div class="endpoint-label receiver">Receiver</div>
+              <div class="endpoint-line sender"></div>
+              <div class="endpoint-line receiver"></div>
+              <svg class="packet-line" id="nodelaySvg">
+                <defs>
+                  <marker id="arrowhead-nodelay" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                    <polygon points="0 0, 7 3.5, 0 7" class="arrow-fill" />
+                  </marker>
+                  <marker id="arrowhead-ack-nodelay" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto">
+                    <polygon points="0 0, 4 2, 0 4" class="arrow-fill-ack" />
+                  </marker>
+                </defs>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-value" id="nodelayPackets">0</div>
+            <div class="stat-label">Packets Sent</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="nodelayTime">0<span style="font-size: 0.875rem">ms</span></div>
+            <div class="stat-label">Total Time</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="nodelayLatency">0<span style="font-size: 0.875rem">ms</span></div>
+            <div class="stat-label">First Byte Latency</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="viz-panel" id="naglePanel">
+        <div class="viz-header">
+          <div>
+            <div class="viz-title">TCP_NODELAY = 0</div>
+            <div class="viz-mode">Nagle Algorithm Enabled</div>
+          </div>
+          <div class="viz-behavior">Buffer until ACK</div>
+        </div>
+        <div class="diagram-wrapper">
+          <div class="timeline" id="nagleTimeline"></div>
+          <div class="diagram-container">
+            <div class="diagram" id="nagleDiagram">
+              <div class="endpoint-label sender">Sender</div>
+              <div class="endpoint-label receiver">Receiver</div>
+              <div class="endpoint-line sender"></div>
+              <div class="endpoint-line receiver"></div>
+              <svg class="packet-line" id="nagleSvg">
+                <defs>
+                  <marker id="arrowhead-nagle" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                    <polygon points="0 0, 7 3.5, 0 7" class="arrow-fill" />
+                  </marker>
+                  <marker id="arrowhead-ack-nagle" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto">
+                    <polygon points="0 0, 4 2, 0 4" class="arrow-fill-ack" />
+                  </marker>
+                </defs>
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-value" id="naglePackets">0</div>
+            <div class="stat-label">Packets Sent</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="nagleTime">0<span style="font-size: 0.875rem">ms</span></div>
+            <div class="stat-label">Total Time</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value" id="nagleLatency">0<span style="font-size: 0.875rem">ms</span></div>
+            <div class="stat-label">First Byte Latency</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item">
+        <div class="legend-line"></div>
+        <span>Data Packet</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-line ack"></div>
+        <span>ACK Response</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      running: false,
+      animationSpeed: 3
+    };
+
+    // Theme handling
+    function setTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('theme', theme);
+
+      document.getElementById('darkBtn').classList.toggle('active', theme === 'dark');
+      document.getElementById('lightBtn').classList.toggle('active', theme === 'light');
+
+      // Update SVG arrow colors
+      updateArrowColors();
+    }
+
+    function updateArrowColors() {
+      const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+      const fgColor = isDark ? '#d4d4d4' : '#262626';
+      const dimColor = isDark ? '#525252' : '#737373';
+
+      document.querySelectorAll('.arrow-fill').forEach(el => {
+        el.setAttribute('fill', fgColor);
+      });
+      document.querySelectorAll('.arrow-fill-ack').forEach(el => {
+        el.setAttribute('fill', dimColor);
+      });
+    }
+
+    document.getElementById('darkBtn').addEventListener('click', () => setTheme('dark'));
+    document.getElementById('lightBtn').addEventListener('click', () => setTheme('light'));
+
+    // Initialize theme
+    const savedTheme = localStorage.getItem('theme') || 'dark';
+    setTheme(savedTheme);
+
+    function clearDiagram(diagramId, timelineId, svgId) {
+      const svg = document.getElementById(svgId);
+      const lines = svg.querySelectorAll('line, text, polygon:not(marker polygon)');
+      lines.forEach(el => el.remove());
+
+      const timeline = document.getElementById(timelineId);
+      timeline.innerHTML = '';
+
+      const diagram = document.getElementById(diagramId);
+      const indicators = diagram.querySelectorAll('.buffer-indicator, .send-indicator, .received-char');
+      indicators.forEach(el => el.remove());
+    }
+
+    function formatPayload(str, maxLen = 8) {
+      // Replace spaces with visible character
+      let display = str.replace(/ /g, '␣');
+      if (display.length <= maxLen) return display;
+      return display.substring(0, maxLen - 1) + '…';
+    }
+
+    function formatChar(char) {
+      // Make spaces visible
+      return char === ' ' ? '␣' : char;
+    }
+
+    function createTimeEvent(timeline, time, char, yPos) {
+      const event = document.createElement('div');
+      event.className = 'time-event';
+      event.style.top = `${yPos}px`;
+      const displayChar = formatChar(char);
+      event.innerHTML = `
+        <div class="time-event-time">${time}ms</div>
+        <div class="time-event-char">${displayChar}</div>
+      `;
+      timeline.appendChild(event);
+      return event;
+    }
+
+    function createBufferIndicator(diagram, yPos, content) {
+      const indicator = document.createElement('div');
+      indicator.className = 'buffer-indicator';
+      indicator.style.top = `${yPos}px`;
+      // Show spaces as visible, and format for display
+      const displayContent = formatPayload(content, 12);
+      indicator.innerHTML = `
+        <div class="buffer-box" title="${content.replace(/ /g, '␣')}">${displayContent}</div>
+        <div class="buffer-label">buffer</div>
+      `;
+      diagram.appendChild(indicator);
+      return indicator;
+    }
+
+    function createSendIndicator(diagram, yPos, text) {
+      const indicator = document.createElement('div');
+      indicator.className = 'send-indicator';
+      indicator.style.top = `${yPos}px`;
+      indicator.textContent = text;
+      diagram.appendChild(indicator);
+      return indicator;
+    }
+
+    function createReceivedChar(diagram, yPos, content) {
+      const indicator = document.createElement('div');
+      indicator.className = 'received-char';
+      indicator.style.top = `${yPos}px`;
+      // Show spaces as visible characters
+      const displayContent = content.replace(/ /g, '␣');
+      indicator.textContent = displayContent;
+      indicator.title = content;
+      diagram.appendChild(indicator);
+      return indicator;
+    }
+
+    function drawPacketArrow(svg, x1, y1, x2, y2, label, isAck, panelId) {
+      const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+      const fgColor = isDark ? '#d4d4d4' : '#262626';
+      const dimColor = isDark ? '#525252' : '#737373';
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', x1);
+      line.setAttribute('y1', y1);
+      line.setAttribute('x2', x1);
+      line.setAttribute('y2', y1);
+      line.setAttribute('class', `packet-arrow ${isAck ? 'ack' : ''}`);
+      line.setAttribute('stroke', isAck ? dimColor : fgColor);
+      line.setAttribute('marker-end', `url(#arrowhead-${isAck ? 'ack-' : ''}${panelId})`);
+      svg.appendChild(line);
+
+      const midX = (x1 + x2) / 2;
+      const midY = (y1 + y2) / 2;
+      // Data labels above the line, ACK labels below (further offset to prevent overlap)
+      const offset = isAck ? 10 : -12;
+
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', midX);
+      text.setAttribute('y', midY + offset);
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('class', `packet-label ${isAck ? 'ack' : ''}`);
+      text.setAttribute('fill', isAck ? dimColor : fgColor);
+      text.textContent = label;
+      svg.appendChild(text);
+
+      return { line, text };
+    }
+
+    async function animateArrow(line, text, x1, y1, x2, y2, duration) {
+      return new Promise(resolve => {
+        line.classList.add('visible');
+        text.classList.add('visible');
+
+        const startTime = performance.now();
+
+        function animate(currentTime) {
+          const elapsed = currentTime - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+
+          const currentX = x1 + (x2 - x1) * progress;
+          const currentY = y1 + (y2 - y1) * progress;
+
+          line.setAttribute('x2', currentX);
+          line.setAttribute('y2', currentY);
+
+          if (progress < 1) {
+            requestAnimationFrame(animate);
+          } else {
+            resolve();
+          }
+        }
+
+        requestAnimationFrame(animate);
+      });
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms * state.animationSpeed));
+    }
+
+    async function runNodelaySimulation(message, inputLatency, rtt) {
+      const diagram = document.getElementById('nodelayDiagram');
+      const timeline = document.getElementById('nodelayTimeline');
+      const svg = document.getElementById('nodelaySvg');
+
+      clearDiagram('nodelayDiagram', 'nodelayTimeline', 'nodelaySvg');
+
+      const containerWidth = diagram.offsetWidth;
+      const senderX = containerWidth * 0.20;
+      const receiverX = containerWidth * 0.80;
+
+      const totalSimTime = message.length * inputLatency + rtt;
+      const diagramHeight = 700;
+      const padding = 40;
+      const pixelsPerMs = (diagramHeight - padding * 2) / totalSimTime;
+
+      let packetsCount = 0;
+      let firstByteLatency = rtt / 2;
+
+      for (let i = 0; i < message.length; i++) {
+        const char = message[i];
+        const inputTime = i * inputLatency;
+        const yInput = padding + inputTime * pixelsPerMs;
+
+        const timeEvent = createTimeEvent(timeline, inputTime, char, yInput);
+        await sleep(30);
+        timeEvent.classList.add('visible');
+
+        const sendIndicator = createSendIndicator(diagram, yInput, 'send');
+        await sleep(20);
+        sendIndicator.classList.add('visible');
+
+        const yPacketEnd = padding + (inputTime + rtt / 2) * pixelsPerMs;
+        const displayChar = formatChar(char);
+        const { line, text } = drawPacketArrow(svg, senderX, yInput, receiverX, yPacketEnd, `"${displayChar}"`, false, 'nodelay');
+
+        packetsCount++;
+        document.getElementById('nodelayPackets').textContent = packetsCount;
+
+        await animateArrow(line, text, senderX, yInput, receiverX, yPacketEnd, (rtt / 2) * state.animationSpeed);
+
+        const receivedDisplay = formatChar(char);
+        const received = createReceivedChar(diagram, yPacketEnd, receivedDisplay);
+        await sleep(20);
+        received.classList.add('visible');
+
+        const yAckEnd = padding + (inputTime + rtt) * pixelsPerMs;
+        const { line: ackLine, text: ackText } = drawPacketArrow(svg, receiverX, yPacketEnd, senderX, yAckEnd, '', true, 'nodelay');
+
+        await animateArrow(ackLine, ackText, receiverX, yPacketEnd, senderX, yAckEnd, (rtt / 2) * state.animationSpeed);
+
+        sendIndicator.classList.remove('visible');
+
+        const currentTime = inputTime + rtt;
+        document.getElementById('nodelayTime').innerHTML = `${Math.round(currentTime)}<span style="font-size: 0.875rem">ms</span>`;
+      }
+
+      const totalTime = (message.length - 1) * inputLatency + rtt;
+      document.getElementById('nodelayTime').innerHTML = `${Math.round(totalTime)}<span style="font-size: 0.875rem">ms</span>`;
+      document.getElementById('nodelayLatency').innerHTML = `${Math.round(firstByteLatency)}<span style="font-size: 0.875rem">ms</span>`;
+
+      return { packetsCount, totalTime };
+    }
+
+    async function runNagleSimulation(message, inputLatency, rtt) {
+      const diagram = document.getElementById('nagleDiagram');
+      const timeline = document.getElementById('nagleTimeline');
+      const svg = document.getElementById('nagleSvg');
+
+      clearDiagram('nagleDiagram', 'nagleTimeline', 'nagleSvg');
+
+      const containerWidth = diagram.offsetWidth;
+      const senderX = containerWidth * 0.20;
+      const receiverX = containerWidth * 0.80;
+
+      // Build event timeline: inputs and ACK arrivals
+      // Nagle: send immediately if no unACKed data, otherwise buffer until ACK arrives
+      let events = [];
+      for (let i = 0; i < message.length; i++) {
+        events.push({ type: 'input', time: i * inputLatency, char: message[i], index: i });
+      }
+
+      // Pre-simulate to determine packets and total time
+      let simPackets = [];
+      let simBuffer = '';
+      let simPendingAckTime = null;
+
+      // Sort and process events chronologically
+      let simEvents = [...events];
+      let eventIdx = 0;
+
+      while (eventIdx < simEvents.length || simBuffer.length > 0) {
+        const nextEvent = simEvents[eventIdx];
+        const nextEventTime = nextEvent ? nextEvent.time : Infinity;
+        const ackTime = simPendingAckTime !== null ? simPendingAckTime : Infinity;
+
+        if (ackTime <= nextEventTime && simPendingAckTime !== null) {
+          // ACK arrives first (or at same time)
+          if (simBuffer.length > 0) {
+            // Send buffered data immediately when ACK arrives
+            simPackets.push({ sendTime: ackTime, payload: simBuffer, ackTime: ackTime + rtt, type: 'ack-triggered' });
+            simPendingAckTime = ackTime + rtt;
+            simBuffer = '';
+          } else {
+            simPendingAckTime = null;
+          }
+        }
+
+        if (nextEvent && nextEventTime <= (simPendingAckTime !== null ? simPendingAckTime : Infinity)) {
+          // Process input event
+          simBuffer += nextEvent.char;
+
+          if (simPendingAckTime === null) {
+            // No pending ACK, send immediately
+            simPackets.push({ sendTime: nextEventTime, payload: simBuffer, ackTime: nextEventTime + rtt, type: 'immediate' });
+            simPendingAckTime = nextEventTime + rtt;
+            simBuffer = '';
+          }
+          eventIdx++;
+        } else if (nextEvent === undefined && simBuffer.length > 0 && simPendingAckTime !== null) {
+          // No more inputs, wait for ACK then send remaining buffer
+          simPackets.push({ sendTime: simPendingAckTime, payload: simBuffer, ackTime: simPendingAckTime + rtt, type: 'final' });
+          simBuffer = '';
+          simPendingAckTime = simPendingAckTime + rtt;
+          break;
+        } else if (nextEvent === undefined) {
+          break;
+        }
+      }
+
+      const lastPacket = simPackets[simPackets.length - 1];
+      const totalSimTime = lastPacket ? lastPacket.ackTime : message.length * inputLatency + rtt;
+      const diagramHeight = 700;
+      const padding = 40;
+      const pixelsPerMs = (diagramHeight - padding * 2) / totalSimTime;
+
+      let packetsCount = 0;
+      let buffer = '';
+      let bufferIndicator = null;
+      let pendingAckTime = null;
+      let totalTime = 0;
+      let firstByteLatency = 0;
+      let receivedStr = '';
+      let currentSendIndicator = null;
+
+      async function sendPacket(sendTime, payload, isAckTriggered = false) {
+        const ySend = padding + sendTime * pixelsPerMs;
+
+        if (currentSendIndicator) {
+          currentSendIndicator.classList.remove('visible');
+        }
+        const label = isAckTriggered ? 'ack→send' : 'send';
+        currentSendIndicator = createSendIndicator(diagram, ySend, label);
+        await sleep(20);
+        currentSendIndicator.classList.add('visible');
+
+        if (bufferIndicator) {
+          bufferIndicator.classList.remove('visible');
+          await sleep(10);
+          bufferIndicator.remove();
+          bufferIndicator = null;
+        }
+
+        const yPacketEnd = padding + (sendTime + rtt / 2) * pixelsPerMs;
+        const displayPayload = formatPayload(payload, 6);
+        const { line, text } = drawPacketArrow(svg, senderX, ySend, receiverX, yPacketEnd, `"${displayPayload}"`, false, 'nagle');
+
+        packetsCount++;
+        document.getElementById('naglePackets').textContent = packetsCount;
+
+        if (packetsCount === 1) {
+          firstByteLatency = rtt / 2;
+        }
+
+        const newAckTime = sendTime + rtt;
+
+        await animateArrow(line, text, senderX, ySend, receiverX, yPacketEnd, (rtt / 2) * state.animationSpeed);
+
+        receivedStr += payload;
+        const received = createReceivedChar(diagram, yPacketEnd, receivedStr);
+        await sleep(20);
+        received.classList.add('visible');
+
+        const yAckEnd = padding + newAckTime * pixelsPerMs;
+        const { line: ackLine, text: ackText } = drawPacketArrow(svg, receiverX, yPacketEnd, senderX, yAckEnd, '', true, 'nagle');
+
+        await animateArrow(ackLine, ackText, receiverX, yPacketEnd, senderX, yAckEnd, (rtt / 2) * state.animationSpeed);
+
+        if (currentSendIndicator) {
+          currentSendIndicator.classList.remove('visible');
+        }
+
+        totalTime = newAckTime;
+        document.getElementById('nagleTime').innerHTML = `${Math.round(totalTime)}<span style="font-size: 0.875rem">ms</span>`;
+
+        return newAckTime;
+      }
+
+      // Process simulation using pre-calculated packets
+      let packetIdx = 0;
+      let lastInputTime = -1;
+
+      for (let i = 0; i < message.length; i++) {
+        const char = message[i];
+        const inputTime = i * inputLatency;
+        const yInput = padding + inputTime * pixelsPerMs;
+
+        // Check if we need to send a packet before this input (ACK-triggered send)
+        while (packetIdx < simPackets.length && simPackets[packetIdx].sendTime < inputTime) {
+          const pkt = simPackets[packetIdx];
+          if (pkt.type === 'ack-triggered' || pkt.type === 'final') {
+            pendingAckTime = await sendPacket(pkt.sendTime, pkt.payload, true);
+            buffer = '';
+          }
+          packetIdx++;
+        }
+
+        // Show character input on timeline
+        const timeEvent = createTimeEvent(timeline, inputTime, char, yInput);
+        await sleep(30);
+        timeEvent.classList.add('visible');
+
+        buffer += char;
+
+        // Update buffer display
+        if (bufferIndicator) {
+          bufferIndicator.classList.remove('visible');
+          await sleep(10);
+          bufferIndicator.remove();
+        }
+        bufferIndicator = createBufferIndicator(diagram, yInput, buffer);
+        await sleep(20);
+        bufferIndicator.classList.add('visible');
+
+        // Check if this input triggers an immediate send
+        const currentPacket = simPackets[packetIdx];
+        if (currentPacket && currentPacket.sendTime === inputTime && currentPacket.type === 'immediate') {
+          pendingAckTime = await sendPacket(inputTime, currentPacket.payload, false);
+          buffer = '';
+          packetIdx++;
+        } else if (pendingAckTime !== null) {
+          // Show buffering state
+          const waitIndicator = createSendIndicator(diagram, yInput, 'buffering');
+          await sleep(20);
+          waitIndicator.classList.add('visible');
+          await sleep(80);
+          waitIndicator.classList.remove('visible');
+        }
+
+        lastInputTime = inputTime;
+
+        // Wait for next character input
+        if (i < message.length - 1) {
+          await sleep(inputLatency);
+        }
+      }
+
+      // Send any remaining packets
+      while (packetIdx < simPackets.length) {
+        const pkt = simPackets[packetIdx];
+        pendingAckTime = await sendPacket(pkt.sendTime, pkt.payload, pkt.type !== 'immediate');
+        packetIdx++;
+      }
+
+      document.getElementById('nagleLatency').innerHTML = `${Math.round(firstByteLatency)}<span style="font-size: 0.875rem">ms</span>`;
+
+      return { packetsCount, totalTime };
+    }
+
+    async function startSimulation() {
+      if (state.running) return;
+      state.running = true;
+
+      const startBtn = document.getElementById('startBtn');
+      startBtn.disabled = true;
+      startBtn.textContent = 'Running...';
+
+      const message = document.getElementById('message').value || 'Hello';
+      const inputLatency = parseInt(document.getElementById('inputLatency').value) || 80;
+      const rtt = parseInt(document.getElementById('rtt').value) || 200;
+
+      document.getElementById('nodelayPackets').textContent = '0';
+      document.getElementById('nodelayTime').innerHTML = '0<span style="font-size: 0.875rem">ms</span>';
+      document.getElementById('nodelayLatency').innerHTML = '0<span style="font-size: 0.875rem">ms</span>';
+      document.getElementById('naglePackets').textContent = '0';
+      document.getElementById('nagleTime').innerHTML = '0<span style="font-size: 0.875rem">ms</span>';
+      document.getElementById('nagleLatency').innerHTML = '0<span style="font-size: 0.875rem">ms</span>';
+
+      await Promise.all([
+        runNodelaySimulation(message, inputLatency, rtt),
+        runNagleSimulation(message, inputLatency, rtt)
+      ]);
+
+      state.running = false;
+      startBtn.disabled = false;
+      startBtn.textContent = 'Start Simulation';
+    }
+
+    document.getElementById('startBtn').addEventListener('click', startSimulation);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !state.running) {
+        startSimulation();
+      }
+    });
+  </script>
+</body>
+</html>
