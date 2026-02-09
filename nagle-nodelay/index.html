@@ -1177,8 +1177,8 @@
       startBtn.textContent = 'Running...';
 
       const message = document.getElementById('message').value || 'Hello';
-      const inputLatency = parseInt(document.getElementById('inputLatency').value) || 80;
-      const rtt = parseInt(document.getElementById('rtt').value) || 200;
+      const inputLatency = Math.max(10, parseInt(document.getElementById('inputLatency').value) || 80);
+      const rtt = Math.max(20, parseInt(document.getElementById('rtt').value) || 200);
 
       document.getElementById('nodelayPackets').textContent = '0';
       document.getElementById('nodelayTime').innerHTML = '0<span style="font-size: 0.875rem">ms</span>';
@@ -1198,6 +1198,16 @@
     }
 
     document.getElementById('startBtn').addEventListener('click', startSimulation);
+
+    // Prevent negative inputs on number fields
+    document.querySelectorAll('input[type="number"]').forEach(input => {
+      input.addEventListener('input', () => {
+        const min = parseInt(input.min) || 0;
+        if (input.value !== '' && parseInt(input.value) < min) {
+          input.value = min;
+        }
+      });
+    });
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !state.running) {
