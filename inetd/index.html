@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>inetd Super-Server Visualization</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Commit+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0c0c0c;
+      --bg-panel: #0f0f0f;
+      --bg-panel-alt: #131313;
+      --fg: #d4d4d4;
+      --dim: #525252;
+      --dimmer: #333;
+      --accent: #fff;
+      --line: #252525;
+      --blue: #4a9eff;
+      --green: #4ade80;
+      --orange: #f97316;
+      --purple: #a78bfa;
+      --red: #ef4444;
+    }
+
+    [data-theme="light"] {
+      --bg: #f5f5f5;
+      --bg-panel: #ffffff;
+      --bg-panel-alt: #fafafa;
+      --fg: #262626;
+      --dim: #737373;
+      --dimmer: #d4d4d4;
+      --accent: #000;
+      --line: #e5e5e5;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --orange: #ea580c;
+      --purple: #7c3aed;
+      --red: #dc2626;
+    }
+
+    body {
+      font-family: 'Commit Mono', 'SF Mono', 'Monaco', monospace;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      padding: 3rem 2rem;
+      line-height: 1.5;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .container { max-width: 1800px; margin: 0 auto; }
+
+    header { text-align: center; margin-bottom: 3rem; position: relative; }
+
+    .theme-toggle {
+      position: absolute; top: 0; right: 0;
+      display: flex; align-items: center; gap: 0.75rem;
+      font-size: 0.6875rem; color: var(--dim);
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .theme-toggle button {
+      background: transparent; border: 1px solid var(--line); color: var(--fg);
+      padding: 0.5rem 0.75rem; font-family: inherit; font-size: 0.625rem;
+      cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.2s;
+    }
+    .theme-toggle button:hover { border-color: var(--dim); }
+    .theme-toggle button.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+    h1 {
+      font-size: 1.25rem; font-weight: 400; letter-spacing: 0.15em;
+      text-transform: uppercase; margin-bottom: 0.75rem; color: var(--accent);
+    }
+    .subtitle { color: var(--dim); font-size: 0.8125rem; letter-spacing: 0.05em; }
+
+    .controls {
+      display: flex; gap: 2rem; justify-content: center;
+      align-items: flex-end; margin-bottom: 1.25rem; flex-wrap: wrap;
+    }
+    .control-group { display: flex; flex-direction: column; gap: 0.625rem; }
+
+    label { font-size: 0.6875rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.15em; }
+
+    select {
+      font-family: inherit; font-size: 0.9375rem; padding: 0.875rem 1.25rem;
+      background: var(--bg); border: 1px solid var(--line); color: var(--fg);
+      outline: none; transition: border-color 0.3s, background 0.3s;
+      cursor: pointer; appearance: none; padding-right: 2rem;
+    }
+    select:focus { border-color: var(--dim); }
+
+    button.primary {
+      font-family: inherit; font-size: 0.75rem; padding: 0.875rem 2.5rem;
+      background: var(--fg); color: var(--bg); border: none; cursor: pointer;
+      text-transform: uppercase; letter-spacing: 0.2em; transition: all 0.3s; font-weight: 700;
+    }
+    button.primary:hover { background: var(--accent); }
+    button.primary:disabled { opacity: 0.2; cursor: not-allowed; }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 320px;
+      gap: 2rem;
+    }
+
+    .viz-panel {
+      background: var(--bg-panel); border: 1px solid var(--line); padding: 2rem;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .viz-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--line);
+    }
+    .viz-title { font-size: 0.8125rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: var(--accent); }
+    .viz-mode { font-size: 0.6875rem; color: var(--dim); margin-top: 0.375rem; letter-spacing: 0.1em; }
+
+    .diagram-container { position: relative; height: 600px; overflow: hidden; }
+
+    svg.viz-svg { width: 100%; height: 100%; }
+
+    .resource-monitor {
+      background: var(--bg-panel);
+      border: 1px solid var(--line);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2rem;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .resource-header {
+      font-size: 0.6875rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 1rem;
+    }
+    .resource-grid {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 1rem;
+      text-align: center;
+    }
+    .stat { display: flex; flex-direction: column; gap: 0.375rem; }
+    .stat-value { font-size: 1.5rem; font-weight: 400; color: var(--accent); letter-spacing: 0.05em; }
+    .stat-label { font-size: 0.5rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.15em; }
+
+    /* Annotations sidebar */
+    .annotations-panel {
+      background: var(--bg-panel); border: 1px solid var(--line); padding: 1.5rem;
+      display: flex; flex-direction: column; max-height: calc(600px + 200px);
+    }
+    .annotations-title {
+      font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.15em; color: var(--accent); margin-bottom: 1rem;
+      padding-bottom: 0.75rem; border-bottom: 1px solid var(--line);
+    }
+    .annotations-log {
+      flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0;
+    }
+    .annotations-log::-webkit-scrollbar { width: 4px; }
+    .annotations-log::-webkit-scrollbar-track { background: var(--bg-panel); }
+    .annotations-log::-webkit-scrollbar-thumb { background: var(--dimmer); }
+
+    .annotation-entry {
+      padding: 0.75rem 0; border-bottom: 1px solid var(--line);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .annotation-entry.visible { opacity: 1; }
+    .annotation-entry.active { background: var(--bg-panel-alt); margin: 0 -1.5rem; padding: 0.75rem 1.5rem; }
+
+    .annotation-phase {
+      font-size: 0.5rem; text-transform: uppercase; letter-spacing: 0.15em;
+      margin-bottom: 0.375rem; font-weight: 700;
+    }
+    .annotation-phase.setup { color: var(--blue); }
+    .annotation-phase.idle { color: var(--dim); }
+    .annotation-phase.connection { color: var(--green); }
+    .annotation-phase.fork { color: var(--orange); }
+    .annotation-phase.simultaneous { color: var(--purple); }
+
+    .annotation-desc {
+      font-size: 0.6875rem; color: var(--fg); line-height: 1.5; margin-bottom: 0.375rem;
+    }
+
+    .annotation-toggle {
+      font-size: 0.5625rem; color: var(--blue); cursor: pointer;
+      user-select: none; letter-spacing: 0.05em;
+    }
+    .annotation-toggle:hover { text-decoration: underline; }
+
+    .annotation-detail {
+      display: none; margin-top: 0.5rem; padding: 0.5rem 0.75rem;
+      background: var(--bg); border-left: 2px solid var(--dimmer);
+      font-size: 0.5625rem; color: var(--dim); line-height: 1.8;
+      font-family: 'Commit Mono', monospace;
+    }
+    .annotation-detail.open { display: block; }
+    .annotation-detail .syscall { color: var(--orange); font-weight: 700; }
+    .annotation-detail .arg { color: var(--blue); }
+    .annotation-detail .result { color: var(--green); }
+
+    /* Legend */
+    .legend {
+      display: flex; justify-content: center; gap: 2.5rem; margin-top: 3rem;
+      padding-top: 2rem; border-top: 1px solid var(--line); flex-wrap: wrap;
+    }
+    .legend-item { display: flex; align-items: center; gap: 0.75rem; font-size: 0.6875rem; color: var(--dim); }
+    .legend-swatch { width: 14px; height: 14px; border-radius: 2px; }
+
+    /* Responsive */
+    @media (max-width: 1400px) {
+      .main-grid { grid-template-columns: 1fr 1fr; }
+      .annotations-panel { grid-column: 1 / -1; max-height: 300px; }
+    }
+
+    @media (max-width: 1200px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .annotations-panel { grid-column: 1; }
+      .resource-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 2rem 1rem; }
+      header { margin-bottom: 2rem; }
+      .theme-toggle { position: static; justify-content: center; margin-bottom: 1.5rem; }
+      h1 { font-size: 1rem; letter-spacing: 0.1em; }
+      .controls { gap: 1rem; }
+      .control-group { width: 100%; }
+      select { width: 100%; font-size: 0.875rem; padding: 0.75rem 1rem; }
+      button.primary { width: 100%; }
+      .resource-monitor { padding: 1rem; margin-bottom: 1.5rem; }
+      .resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+      .viz-panel { padding: 1rem; }
+      .viz-header { flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; padding-bottom: 1rem; }
+      .diagram-container { height: 500px; }
+      .stat-value { font-size: 1.25rem; }
+      .legend { gap: 1rem; margin-top: 2rem; padding-top: 1.5rem; }
+      .legend-item { font-size: 0.625rem; gap: 0.5rem; }
+    }
+
+    @media (max-width: 480px) {
+      body { padding: 1.5rem 0.75rem; }
+      .diagram-container { height: 400px; }
+      .resource-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .annotations-panel { padding: 1rem; max-height: 250px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="theme-toggle">
+        <span>Theme</span>
+        <button id="darkBtn" class="active">Dark</button>
+        <button id="lightBtn">Light</button>
+      </div>
+      <h1>inetd Super-Server</h1>
+      <p class="subtitle">How inetd consolidates multiple network services into a single listening process</p>
+    </header>
+
+    <div class="controls">
+      <div class="control-group">
+        <label for="animSpeed">Animation</label>
+        <select id="animSpeed">
+          <option value="4">Slow</option>
+          <option value="2.5" selected>Normal</option>
+          <option value="1.2">Fast</option>
+          <option value="0.4">Instant</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <button class="primary" id="startBtn">Run</button>
+      </div>
+    </div>
+
+    <div class="resource-monitor">
+      <div class="resource-header">Global Resource Monitor</div>
+      <div class="resource-grid">
+        <div class="stat"><div class="stat-value" id="sProcs">0</div><div class="stat-label">Standalone Procs</div></div>
+        <div class="stat"><div class="stat-value" id="sMem">0<span style="font-size:0.75rem">MB</span></div><div class="stat-label">Standalone Memory</div></div>
+        <div class="stat"><div class="stat-value" id="sConns">0</div><div class="stat-label">Standalone Conns</div></div>
+        <div class="stat"><div class="stat-value" id="sPorts">0</div><div class="stat-label">Standalone Ports</div></div>
+        <div class="stat"><div class="stat-value" id="iProcs">0</div><div class="stat-label">inetd Procs</div></div>
+        <div class="stat"><div class="stat-value" id="iMem">0<span style="font-size:0.75rem">MB</span></div><div class="stat-label">inetd Memory</div></div>
+        <div class="stat"><div class="stat-value" id="iConns">0</div><div class="stat-label">inetd Conns</div></div>
+        <div class="stat"><div class="stat-value" id="iForks">0</div><div class="stat-label">inetd Forks</div></div>
+      </div>
+    </div>
+
+    <div class="main-grid">
+      <!-- Left: Standalone Daemons -->
+      <div class="viz-panel">
+        <div class="viz-header">
+          <div>
+            <div class="viz-title">Standalone Daemons</div>
+            <div class="viz-mode">Each service runs its own process</div>
+          </div>
+        </div>
+        <div class="diagram-container">
+          <svg class="viz-svg" id="standaloneSvg" viewBox="0 0 500 600">
+            <defs>
+              <marker id="ah-blue-s" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-blue" /></marker>
+              <marker id="ah-green-s" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-green" /></marker>
+              <marker id="ah-orange-s" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-orange" /></marker>
+            </defs>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Right: inetd -->
+      <div class="viz-panel">
+        <div class="viz-header">
+          <div>
+            <div class="viz-title">inetd Super-Server</div>
+            <div class="viz-mode">Single process listens on all ports</div>
+          </div>
+        </div>
+        <div class="diagram-container">
+          <svg class="viz-svg" id="inetdSvg" viewBox="0 0 500 600">
+            <defs>
+              <marker id="ah-blue-i" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-blue" /></marker>
+              <marker id="ah-green-i" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-green" /></marker>
+              <marker id="ah-orange-i" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-orange" /></marker>
+              <marker id="ah-purple-i" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-purple" /></marker>
+            </defs>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Annotations Sidebar -->
+      <div class="annotations-panel">
+        <div class="annotations-title">Annotations</div>
+        <div class="annotations-log" id="annotationsLog"></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--blue)"></div><span>socket / bind / listen</span></div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--green)"></div><span>accept / connect</span></div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--orange)"></div><span>fork / exec</span></div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--purple)"></div><span>dup2 / data flow</span></div>
+      <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div><span>memory waste</span></div>
+    </div>
+  </div>
+
+  <script>
+    const state = { running: false, animationSpeed: 2.5 };
+
+    // ── Theme ──
+    function setTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      localStorage.setItem('theme', t);
+      document.getElementById('darkBtn').classList.toggle('active', t === 'dark');
+      document.getElementById('lightBtn').classList.toggle('active', t === 'light');
+      updateArrowColors();
+    }
+    function updateArrowColors() {
+      const s = getComputedStyle(document.documentElement);
+      document.querySelectorAll('.af-blue').forEach(el => el.setAttribute('fill', s.getPropertyValue('--blue').trim()));
+      document.querySelectorAll('.af-green').forEach(el => el.setAttribute('fill', s.getPropertyValue('--green').trim()));
+      document.querySelectorAll('.af-orange').forEach(el => el.setAttribute('fill', s.getPropertyValue('--orange').trim()));
+      document.querySelectorAll('.af-purple').forEach(el => el.setAttribute('fill', s.getPropertyValue('--purple').trim()));
+    }
+    document.getElementById('darkBtn').addEventListener('click', () => setTheme('dark'));
+    document.getElementById('lightBtn').addEventListener('click', () => setTheme('light'));
+    setTheme(localStorage.getItem('theme') || 'dark');
+    document.getElementById('animSpeed').addEventListener('change', e => { state.animationSpeed = parseFloat(e.target.value); });
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms * state.animationSpeed)); }
+
+    // ── SVG Helpers ──
+    const NS = 'http://www.w3.org/2000/svg';
+    function svgEl(tag, attrs) {
+      const el = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+      return el;
+    }
+    function getColor(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim();
+    }
+
+    function drawRect(svg, x, y, w, h, opts = {}) {
+      const rect = svgEl('rect', {
+        x, y, width: w, height: h, rx: opts.rx || 6, ry: opts.ry || 6,
+        fill: opts.fill || 'none', stroke: opts.stroke || getColor('dim'),
+        'stroke-width': opts.sw || 1.5, opacity: opts.opacity ?? 0
+      });
+      if (opts.dash) rect.setAttribute('stroke-dasharray', opts.dash);
+      svg.appendChild(rect);
+      return rect;
+    }
+
+    function drawText(svg, x, y, text, opts = {}) {
+      const t = svgEl('text', {
+        x, y, 'text-anchor': opts.anchor || 'middle', 'font-size': opts.size || 11,
+        'font-family': "'Commit Mono', monospace", fill: opts.fill || getColor('fg'),
+        'font-weight': opts.weight || 400, opacity: opts.opacity ?? 0
+      });
+      t.textContent = text;
+      svg.appendChild(t);
+      return t;
+    }
+
+    function drawLine(svg, x1, y1, x2, y2, opts = {}) {
+      const line = svgEl('line', {
+        x1, y1, x2: opts.animated ? x1 : x2, y2: opts.animated ? y1 : y2,
+        stroke: opts.stroke || getColor('fg'), 'stroke-width': opts.sw || 1.5,
+        opacity: 0
+      });
+      if (opts.dash) line.setAttribute('stroke-dasharray', opts.dash);
+      if (opts.marker) line.setAttribute('marker-end', opts.marker);
+      svg.appendChild(line);
+      return line;
+    }
+
+    function drawLabel(svg, x, y, text, color) {
+      const t = svgEl('text', {
+        x, y, 'text-anchor': 'middle', 'font-size': 8,
+        'font-family': "'Commit Mono', monospace",
+        fill: color || getColor('dim'), 'font-weight': 700, opacity: 0
+      });
+      t.textContent = text;
+      svg.appendChild(t);
+      return t;
+    }
+
+    async function fadeIn(el, dur = 300) {
+      el.setAttribute('opacity', '0');
+      const t0 = performance.now();
+      return new Promise(resolve => {
+        function tick(now) {
+          const p = Math.min((now - t0) / dur, 1);
+          el.setAttribute('opacity', String(p));
+          p < 1 ? requestAnimationFrame(tick) : resolve();
+        }
+        requestAnimationFrame(tick);
+      });
+    }
+
+    async function fadeOut(el, dur = 300) {
+      const t0 = performance.now();
+      return new Promise(resolve => {
+        function tick(now) {
+          const p = Math.min((now - t0) / dur, 1);
+          el.setAttribute('opacity', String(1 - p));
+          p < 1 ? requestAnimationFrame(tick) : resolve();
+        }
+        requestAnimationFrame(tick);
+      });
+    }
+
+    async function animLine(line, x1, y1, x2, y2, dur) {
+      line.setAttribute('opacity', '1');
+      const t0 = performance.now();
+      dur = Math.max(dur, 16);
+      return new Promise(resolve => {
+        function tick(now) {
+          const p = Math.min((now - t0) / dur, 1);
+          line.setAttribute('x2', x1 + (x2 - x1) * p);
+          line.setAttribute('y2', y1 + (y2 - y1) * p);
+          p < 1 ? requestAnimationFrame(tick) : resolve();
+        }
+        requestAnimationFrame(tick);
+      });
+    }
+
+    async function flash(el, color, times = 2) {
+      const orig = el.getAttribute('stroke');
+      for (let i = 0; i < times; i++) {
+        el.setAttribute('stroke', color);
+        await sleep(40);
+        el.setAttribute('stroke', orig);
+        await sleep(40);
+      }
+    }
+
+    // ── Annotations ──
+    function addAnnotation(phase, desc, syscalls) {
+      const log = document.getElementById('annotationsLog');
+      // Remove active from previous
+      log.querySelectorAll('.annotation-entry.active').forEach(e => e.classList.remove('active'));
+      const entry = document.createElement('div');
+      entry.className = 'annotation-entry';
+      let detailHtml = '';
+      if (syscalls) {
+        detailHtml = `<div class="annotation-toggle" onclick="this.nextElementSibling.classList.toggle('open')">+ syscall detail</div><div class="annotation-detail">${syscalls}</div>`;
+      }
+      entry.innerHTML = `<div class="annotation-phase ${phase}">${phase}</div><div class="annotation-desc">${desc}</div>${detailHtml}`;
+      log.appendChild(entry);
+      requestAnimationFrame(() => { entry.classList.add('visible'); entry.classList.add('active'); });
+      log.scrollTop = log.scrollHeight;
+    }
+
+    // ── Resource accounting ──
+    const inetdMemBaseMb = 0.8;
+    const inetdChildMemMb = 0.6;
+    let inetdMemViz = null;
+
+    function inetdTotalMemMb(procCount) {
+      return inetdMemBaseMb + Math.max(0, procCount - 1) * inetdChildMemMb;
+    }
+
+    function setInetdProcCount(procCount) {
+      document.getElementById('iProcs').textContent = String(procCount);
+      const mem = inetdTotalMemMb(procCount);
+      document.getElementById('iMem').innerHTML = `${mem.toFixed(1)}<span style="font-size:0.75rem">MB</span>`;
+
+      if (!inetdMemViz) return;
+      const ratio = Math.min(1, mem / 3.0);
+      const barWidth = Math.max(8, 80 * ratio);
+      const memColor = mem <= 0.8 ? getColor('green') : getColor('orange');
+      inetdMemViz.bar.setAttribute('width', String(barWidth));
+      inetdMemViz.bar.setAttribute('fill', memColor);
+      inetdMemViz.label.textContent = `${mem.toFixed(1)}MB`;
+      inetdMemViz.label.setAttribute('fill', memColor);
+    }
+
+    // ── Clear ──
+    function clearSvg(id) {
+      const svg = document.getElementById(id);
+      svg.querySelectorAll(':not(defs):not(defs *)').forEach(el => {
+        if (el !== svg) el.remove();
+      });
+      // Re-add defs
+    }
+    function clearAll() {
+      ['standaloneSvg', 'inetdSvg'].forEach(id => {
+        const svg = document.getElementById(id);
+        const defs = svg.querySelector('defs');
+        while (svg.lastChild && svg.lastChild !== defs) svg.removeChild(svg.lastChild);
+      });
+      document.getElementById('annotationsLog').innerHTML = '';
+      ['sProcs','sConns','sPorts'].forEach(id => document.getElementById(id).textContent = '0');
+      document.getElementById('sMem').innerHTML = '0<span style="font-size:0.75rem">MB</span>';
+      ['iProcs','iConns','iForks'].forEach(id => document.getElementById(id).textContent = '0');
+      document.getElementById('iMem').innerHTML = '0<span style="font-size:0.75rem">MB</span>';
+      inetdMemViz = null;
+    }
+
+    // ── Services Config ──
+    const services = [
+      { name: 'ftpd', port: 21, color: 'blue', y: 120 },
+      { name: 'telnetd', port: 23, color: 'green', y: 280 },
+      { name: 'daytimed', port: 13, color: 'orange', y: 440 },
+    ];
+
+    // ════════════════════════════════════════════════
+    // Phase 1: SETUP
+    // ════════════════════════════════════════════════
+    async function phaseSetup() {
+      const sSvg = document.getElementById('standaloneSvg');
+      const iSvg = document.getElementById('inetdSvg');
+
+      addAnnotation('setup', 'Standalone: Each daemon starts independently, creating its own socket, binding to its port, and calling listen().', '<span class="syscall">socket()</span> <span class="arg">AF_INET, SOCK_STREAM</span><br><span class="syscall">bind()</span> <span class="arg">port</span><br><span class="syscall">listen()</span> <span class="arg">backlog=5</span>');
+
+      // ── Standalone: 3 daemon boxes ──
+      const sBoxes = [];
+      const sLabels = [];
+      const sPortLabels = [];
+      const sMemBars = [];
+
+      for (const svc of services) {
+        const box = drawRect(sSvg, 150, svc.y - 30, 180, 60, { stroke: getColor(svc.color), sw: 2 });
+        const label = drawText(sSvg, 240, svc.y + 5, svc.name, { fill: getColor(svc.color), weight: 700, size: 14 });
+        const port = drawText(sSvg, 240, svc.y + 45, `:${svc.port}`, { fill: getColor('dim'), size: 10 });
+
+        // Memory bar (red-tinted)
+        const memBg = drawRect(sSvg, 350, svc.y - 12, 80, 10, { fill: getColor('bg'), stroke: getColor('dimmer'), rx: 2, ry: 2, sw: 1 });
+        const memBar = drawRect(sSvg, 350, svc.y - 12, 60, 10, { fill: getColor('red'), stroke: 'none', rx: 2, ry: 2, sw: 0 });
+        const memLabel = drawText(sSvg, 390, svc.y + 10, '1.5MB', { fill: getColor('red'), size: 8 });
+
+        sBoxes.push(box); sLabels.push(label); sPortLabels.push(port);
+        sMemBars.push({ bg: memBg, bar: memBar, label: memLabel });
+
+        await fadeIn(box, 200 * state.animationSpeed);
+        await fadeIn(label, 150 * state.animationSpeed);
+        await Promise.all([fadeIn(port, 150 * state.animationSpeed)]);
+
+        document.getElementById('sProcs').textContent = sBoxes.length;
+        document.getElementById('sPorts').textContent = sBoxes.length;
+        await sleep(30);
+      }
+
+      // Show memory bars
+      for (const m of sMemBars) {
+        await Promise.all([fadeIn(m.bg, 150 * state.animationSpeed), fadeIn(m.bar, 150 * state.animationSpeed), fadeIn(m.label, 150 * state.animationSpeed)]);
+      }
+
+      // ── inetd side ──
+      addAnnotation('setup', 'inetd reads /etc/inetd.conf, creates sockets for all services, and monitors them with select().', '<span class="syscall">parse</span> <span class="arg">/etc/inetd.conf</span><br>for each service:<br>&nbsp;&nbsp;<span class="syscall">socket()</span> <span class="arg">AF_INET, SOCK_STREAM</span><br>&nbsp;&nbsp;<span class="syscall">bind()</span> <span class="arg">port</span><br>&nbsp;&nbsp;<span class="syscall">listen()</span> <span class="arg">backlog=5</span><br><span class="syscall">select()</span> <span class="arg">fd_set={fd3, fd4, fd5}</span>');
+
+      // Config file icon
+      const cfgRect = drawRect(iSvg, 30, 40, 90, 30, { stroke: getColor('dim'), sw: 1 });
+      const cfgLabel = drawText(iSvg, 75, 60, 'inetd.conf', { fill: getColor('dim'), size: 9 });
+      await Promise.all([fadeIn(cfgRect, 200 * state.animationSpeed), fadeIn(cfgLabel, 200 * state.animationSpeed)]);
+
+      // inetd main box
+      const inetdBox = drawRect(iSvg, 150, 80, 200, 440, { stroke: getColor('blue'), sw: 2 });
+      const inetdLabel = drawText(iSvg, 250, 130, 'inetd', { fill: getColor('blue'), weight: 700, size: 16 });
+      const selectLabel = drawText(iSvg, 250, 155, 'select() loop', { fill: getColor('dim'), size: 9 });
+      await Promise.all([fadeIn(inetdBox, 300 * state.animationSpeed), fadeIn(inetdLabel, 200 * state.animationSpeed), fadeIn(selectLabel, 200 * state.animationSpeed)]);
+
+      // Port labels inside inetd box
+      const portYs = [220, 310, 400];
+      for (let i = 0; i < services.length; i++) {
+        const svc = services[i];
+        const pLabel = drawText(iSvg, 250, portYs[i], `:${svc.port} ${svc.name.replace(/d$/, '')}`, { fill: getColor(svc.color), size: 11, weight: 700 });
+        const listenLabel = drawText(iSvg, 250, portYs[i] + 16, 'LISTENING', { fill: getColor('dim'), size: 7 });
+        await Promise.all([fadeIn(pLabel, 150 * state.animationSpeed), fadeIn(listenLabel, 150 * state.animationSpeed)]);
+      }
+
+      setInetdProcCount(1);
+
+      // Config arrow
+      const cfgArrow = drawLine(iSvg, 120, 55, 150, 100, { stroke: getColor('dim'), sw: 1, dash: '3 3', animated: true, marker: `url(#ah-blue-i)` });
+      await animLine(cfgArrow, 120, 55, 150, 100, 80 * state.animationSpeed);
+
+      // Fade out config after reading
+      await sleep(60);
+      await Promise.all([fadeOut(cfgRect, 200 * state.animationSpeed), fadeOut(cfgLabel, 200 * state.animationSpeed), fadeOut(cfgArrow, 200 * state.animationSpeed)]);
+
+      return { sBoxes, sLabels, sPortLabels, sMemBars, inetdBox, portYs };
+    }
+
+    // ════════════════════════════════════════════════
+    // Phase 2: IDLE — Memory comparison
+    // ════════════════════════════════════════════════
+    async function phaseIdle() {
+      addAnnotation('idle', 'Idle comparison: Standalone daemons each consume ~1.5MB resident memory. inetd uses ~0.8MB total while waiting.', 'Standalone: 3 processes x ~1.5MB = ~4.5MB RSS<br>inetd: 1 process x ~0.8MB = ~0.8MB RSS<br><br>inetd saves ~82% memory when idle');
+
+      document.getElementById('sMem').innerHTML = '4.5<span style="font-size:0.75rem">MB</span>';
+      inetdMemViz = null;
+      setInetdProcCount(1);
+      await sleep(120);
+    }
+
+    // ════════════════════════════════════════════════
+    // Phase 3: Telnet connection
+    // ════════════════════════════════════════════════
+    async function phaseTelnetConnection(ctx) {
+      const sSvg = document.getElementById('standaloneSvg');
+      const iSvg = document.getElementById('inetdSvg');
+
+      addAnnotation('connection', 'A client connects to port 23 (Telnet). Left: telnetd accepts directly. Right: inetd detects activity via select().', '<span class="syscall">connect()</span> <span class="arg">:23</span> <span class="result">\u2192 SYN</span>');
+
+      // ── Standalone side: client arrow to telnetd ──
+      const sClientLabel = drawText(sSvg, 40, 275, 'Client', { fill: getColor('green'), size: 9, weight: 700 });
+      const sArrow = drawLine(sSvg, 60, 280, 150, 280, { stroke: getColor('green'), sw: 1.5, animated: true, marker: `url(#ah-green-s)` });
+      const sConnLabel = drawLabel(sSvg, 105, 272, 'connect :23', getColor('green'));
+      await fadeIn(sClientLabel, 150 * state.animationSpeed);
+      await fadeIn(sConnLabel, 100 * state.animationSpeed);
+      await animLine(sArrow, 60, 280, 150, 280, 100 * state.animationSpeed);
+
+      // Response
+      const sResp = drawLine(sSvg, 150, 290, 60, 290, { stroke: getColor('green'), sw: 1, dash: '4 3', animated: true, marker: `url(#ah-green-s)` });
+      const sRespLabel = drawLabel(sSvg, 105, 304, 'response', getColor('green'));
+      await fadeIn(sRespLabel, 100 * state.animationSpeed);
+      await animLine(sResp, 150, 290, 60, 290, 100 * state.animationSpeed);
+
+      document.getElementById('sConns').textContent = '1';
+
+      // ── inetd side: client arrow ──
+      addAnnotation('fork', 'inetd: select() returns fd for :23. inetd calls accept(), then fork(). Child does dup2() to wire socket to stdin/stdout, then exec("telnetd").', '<span class="syscall">select()</span> <span class="result">\u2192 fd4 ready</span><br><span class="syscall">accept()</span> <span class="arg">fd4</span> <span class="result">\u2192 fd6 (client socket)</span><br><span class="syscall">fork()</span> <span class="result">\u2192 pid 1234 (child)</span><br><br>In child:<br>&nbsp;&nbsp;<span class="syscall">dup2()</span> <span class="arg">fd6 \u2192 STDIN (0)</span><br>&nbsp;&nbsp;<span class="syscall">dup2()</span> <span class="arg">fd6 \u2192 STDOUT (1)</span><br>&nbsp;&nbsp;<span class="syscall">dup2()</span> <span class="arg">fd6 \u2192 STDERR (2)</span><br>&nbsp;&nbsp;<span class="syscall">close()</span> <span class="arg">fd6</span><br>&nbsp;&nbsp;<span class="syscall">exec()</span> <span class="arg">"/usr/sbin/telnetd"</span>');
+
+      const iClientLabel = drawText(iSvg, 40, 305, 'Client', { fill: getColor('green'), size: 9, weight: 700 });
+      const iArrow = drawLine(iSvg, 60, 310, 150, 310, { stroke: getColor('green'), sw: 1.5, animated: true, marker: `url(#ah-green-i)` });
+      const iConnLabel = drawLabel(iSvg, 105, 302, 'connect :23', getColor('green'));
+      await fadeIn(iClientLabel, 150 * state.animationSpeed);
+      await fadeIn(iConnLabel, 100 * state.animationSpeed);
+      await animLine(iArrow, 60, 310, 150, 310, 100 * state.animationSpeed);
+
+      // Fork visualization
+      const forkLine = drawLine(iSvg, 350, 310, 420, 310, { stroke: getColor('orange'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-orange-i)` });
+      const forkLabel = drawLabel(iSvg, 385, 300, 'fork()', getColor('orange'));
+      await fadeIn(forkLabel, 100 * state.animationSpeed);
+      await animLine(forkLine, 350, 310, 420, 310, 100 * state.animationSpeed);
+
+      // Child process box
+      const childBox = drawRect(iSvg, 420, 285, 70, 50, { stroke: getColor('orange'), sw: 1.5 });
+      const childLabel = drawText(iSvg, 455, 308, 'telnetd', { fill: getColor('orange'), weight: 700, size: 9 });
+      const childPid = drawText(iSvg, 455, 322, 'pid 1234', { fill: getColor('dim'), size: 7 });
+      await Promise.all([fadeIn(childBox, 200 * state.animationSpeed), fadeIn(childLabel, 150 * state.animationSpeed), fadeIn(childPid, 150 * state.animationSpeed)]);
+
+      // dup2 arrows
+      const dup2Label = drawLabel(iSvg, 400, 345, 'dup2() \u2192 stdin/stdout', getColor('purple'));
+      await fadeIn(dup2Label, 150 * state.animationSpeed);
+
+      // exec flash
+      await flash(childBox, getColor('orange'), 2);
+
+      document.getElementById('iConns').textContent = '1';
+      document.getElementById('iForks').textContent = '1';
+      setInetdProcCount(2);
+
+      // Response from child
+      const iResp = drawLine(iSvg, 420, 320, 60, 320, { stroke: getColor('green'), sw: 1, dash: '4 3', animated: true, marker: `url(#ah-green-i)` });
+      const iRespLabel = drawLabel(iSvg, 240, 334, 'response', getColor('green'));
+      await fadeIn(iRespLabel, 100 * state.animationSpeed);
+      await animLine(iResp, 420, 320, 60, 320, 150 * state.animationSpeed);
+
+      // Child fades after response
+      await sleep(80);
+      await Promise.all([fadeOut(childBox, 300 * state.animationSpeed), fadeOut(childLabel, 300 * state.animationSpeed), fadeOut(childPid, 300 * state.animationSpeed), fadeOut(dup2Label, 300 * state.animationSpeed)]);
+      setInetdProcCount(1);
+      await Promise.all([
+        fadeOut(sClientLabel, 250 * state.animationSpeed), fadeOut(sArrow, 250 * state.animationSpeed), fadeOut(sConnLabel, 250 * state.animationSpeed),
+        fadeOut(sResp, 250 * state.animationSpeed), fadeOut(sRespLabel, 250 * state.animationSpeed),
+        fadeOut(iClientLabel, 250 * state.animationSpeed), fadeOut(iArrow, 250 * state.animationSpeed), fadeOut(iConnLabel, 250 * state.animationSpeed),
+        fadeOut(forkLine, 250 * state.animationSpeed), fadeOut(forkLabel, 250 * state.animationSpeed),
+        fadeOut(iResp, 250 * state.animationSpeed), fadeOut(iRespLabel, 250 * state.animationSpeed),
+      ]);
+
+      await sleep(60);
+    }
+
+    // ════════════════════════════════════════════════
+    // Phase 4: FTP connection
+    // ════════════════════════════════════════════════
+    async function phaseFtpConnection() {
+      const sSvg = document.getElementById('standaloneSvg');
+      const iSvg = document.getElementById('inetdSvg');
+
+      addAnnotation('connection', 'A client connects to port 21 (FTP). Same pattern: standalone handles directly, inetd goes through accept \u2192 fork \u2192 dup2 \u2192 exec.', '<span class="syscall">connect()</span> <span class="arg">:21</span><br><br>inetd side:<br><span class="syscall">select()</span> <span class="result">\u2192 fd3 ready</span><br><span class="syscall">accept()</span> \u2192 <span class="syscall">fork()</span> \u2192 <span class="syscall">dup2()</span> \u2192 <span class="syscall">exec()</span> <span class="arg">"/usr/sbin/ftpd"</span>');
+
+      // ── Standalone ──
+      const sClientLabel = drawText(sSvg, 40, 115, 'Client', { fill: getColor('blue'), size: 9, weight: 700 });
+      const sArrow = drawLine(sSvg, 60, 120, 150, 120, { stroke: getColor('blue'), sw: 1.5, animated: true, marker: `url(#ah-blue-s)` });
+      const sConnLabel = drawLabel(sSvg, 105, 112, 'connect :21', getColor('blue'));
+      await fadeIn(sClientLabel, 150 * state.animationSpeed);
+      await fadeIn(sConnLabel, 100 * state.animationSpeed);
+      await animLine(sArrow, 60, 120, 150, 120, 100 * state.animationSpeed);
+
+      const sResp = drawLine(sSvg, 150, 130, 60, 130, { stroke: getColor('blue'), sw: 1, dash: '4 3', animated: true, marker: `url(#ah-blue-s)` });
+      const sRespLabel = drawLabel(sSvg, 105, 144, 'response', getColor('blue'));
+      await fadeIn(sRespLabel, 100 * state.animationSpeed);
+      await animLine(sResp, 150, 130, 60, 130, 100 * state.animationSpeed);
+
+      document.getElementById('sConns').textContent = '2';
+
+      // ── inetd ──
+      const iClientLabel = drawText(iSvg, 40, 215, 'Client', { fill: getColor('blue'), size: 9, weight: 700 });
+      const iArrow = drawLine(iSvg, 60, 220, 150, 220, { stroke: getColor('blue'), sw: 1.5, animated: true, marker: `url(#ah-blue-i)` });
+      const iConnLabel = drawLabel(iSvg, 105, 212, 'connect :21', getColor('blue'));
+      await fadeIn(iClientLabel, 150 * state.animationSpeed);
+      await fadeIn(iConnLabel, 100 * state.animationSpeed);
+      await animLine(iArrow, 60, 220, 150, 220, 100 * state.animationSpeed);
+
+      // Fork
+      const forkLine = drawLine(iSvg, 350, 220, 420, 220, { stroke: getColor('orange'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-orange-i)` });
+      const forkLabel = drawLabel(iSvg, 385, 210, 'fork()', getColor('orange'));
+      await fadeIn(forkLabel, 100 * state.animationSpeed);
+      await animLine(forkLine, 350, 220, 420, 220, 100 * state.animationSpeed);
+
+      const childBox = drawRect(iSvg, 420, 195, 70, 50, { stroke: getColor('orange'), sw: 1.5 });
+      const childLabel = drawText(iSvg, 455, 218, 'ftpd', { fill: getColor('orange'), weight: 700, size: 9 });
+      const childPid = drawText(iSvg, 455, 232, 'pid 1235', { fill: getColor('dim'), size: 7 });
+      await Promise.all([fadeIn(childBox, 200 * state.animationSpeed), fadeIn(childLabel, 150 * state.animationSpeed), fadeIn(childPid, 150 * state.animationSpeed)]);
+
+      const dup2Label = drawLabel(iSvg, 400, 255, 'dup2() \u2192 stdin/stdout', getColor('purple'));
+      await fadeIn(dup2Label, 150 * state.animationSpeed);
+      await flash(childBox, getColor('orange'), 2);
+
+      document.getElementById('iConns').textContent = '2';
+      document.getElementById('iForks').textContent = '2';
+      setInetdProcCount(2);
+
+      const iResp = drawLine(iSvg, 420, 230, 60, 230, { stroke: getColor('blue'), sw: 1, dash: '4 3', animated: true, marker: `url(#ah-blue-i)` });
+      const iRespLabel = drawLabel(iSvg, 240, 244, 'response', getColor('blue'));
+      await fadeIn(iRespLabel, 100 * state.animationSpeed);
+      await animLine(iResp, 420, 230, 60, 230, 150 * state.animationSpeed);
+
+      await sleep(80);
+      await Promise.all([fadeOut(childBox, 300 * state.animationSpeed), fadeOut(childLabel, 300 * state.animationSpeed), fadeOut(childPid, 300 * state.animationSpeed), fadeOut(dup2Label, 300 * state.animationSpeed)]);
+      setInetdProcCount(1);
+      await Promise.all([
+        fadeOut(sClientLabel, 250 * state.animationSpeed), fadeOut(sArrow, 250 * state.animationSpeed), fadeOut(sConnLabel, 250 * state.animationSpeed),
+        fadeOut(sResp, 250 * state.animationSpeed), fadeOut(sRespLabel, 250 * state.animationSpeed),
+        fadeOut(iClientLabel, 250 * state.animationSpeed), fadeOut(iArrow, 250 * state.animationSpeed), fadeOut(iConnLabel, 250 * state.animationSpeed),
+        fadeOut(forkLine, 250 * state.animationSpeed), fadeOut(forkLabel, 250 * state.animationSpeed),
+        fadeOut(iResp, 250 * state.animationSpeed), fadeOut(iRespLabel, 250 * state.animationSpeed),
+      ]);
+
+      await sleep(60);
+    }
+
+    // ════════════════════════════════════════════════
+    // Phase 5: Simultaneous connections (Telnet + Daytime)
+    // ════════════════════════════════════════════════
+    async function phaseSimultaneous(ctx) {
+      const sSvg = document.getElementById('standaloneSvg');
+      const iSvg = document.getElementById('inetdSvg');
+
+      addAnnotation('simultaneous', 'Two clients connect at once: Telnet (:23) and Daytime (:13). Standalone handles both independently. inetd uses select() to detect both, forking a child for each.', '<span class="syscall">select()</span> <span class="result">\u2192 fd4, fd5 ready (both!)</span><br><br>First: accept fd4 (telnet)<br>&nbsp;&nbsp;<span class="syscall">fork()</span> \u2192 child <span class="syscall">exec()</span> <span class="arg">"telnetd"</span><br><br>Then: accept fd5 (daytime)<br>&nbsp;&nbsp;<span class="syscall">fork()</span> \u2192 child <span class="syscall">exec()</span> <span class="arg">"daytimed"</span><br><br>select() loop handles them sequentially but near-instantly');
+
+      // ── Standalone: two connections in parallel ──
+      // Telnet
+      const sClient1 = drawText(sSvg, 40, 340, 'Client', { fill: getColor('green'), size: 8, weight: 700 });
+      const sArrow1 = drawLine(sSvg, 60, 345, 150, 300, { stroke: getColor('green'), sw: 1.5, animated: true, marker: `url(#ah-green-s)` });
+      const sLabel1 = drawLabel(sSvg, 90, 318, ':23', getColor('green'));
+      // Daytime
+      const sClient2 = drawText(sSvg, 40, 500, 'Client', { fill: getColor('orange'), size: 8, weight: 700 });
+      const sArrow2 = drawLine(sSvg, 60, 505, 150, 460, { stroke: getColor('orange'), sw: 1.5, animated: true, marker: `url(#ah-orange-s)` });
+      const sLabel2 = drawLabel(sSvg, 90, 478, ':13', getColor('orange'));
+
+      await Promise.all([
+        fadeIn(sClient1, 100 * state.animationSpeed),
+        fadeIn(sLabel1, 100 * state.animationSpeed),
+        fadeIn(sClient2, 100 * state.animationSpeed),
+        fadeIn(sLabel2, 100 * state.animationSpeed),
+      ]);
+      await Promise.all([
+        animLine(sArrow1, 60, 345, 150, 300, 100 * state.animationSpeed),
+        animLine(sArrow2, 60, 505, 150, 460, 100 * state.animationSpeed),
+      ]);
+
+      // Responses
+      const sResp1 = drawLine(sSvg, 150, 310, 60, 355, { stroke: getColor('green'), sw: 1, dash: '4 3', animated: true, marker: `url(#ah-green-s)` });
+      const sResp2 = drawLine(sSvg, 150, 470, 60, 515, { stroke: getColor('orange'), sw: 1, dash: '4 3', animated: true, marker: `url(#ah-orange-s)` });
+      await Promise.all([
+        animLine(sResp1, 150, 310, 60, 355, 100 * state.animationSpeed),
+        animLine(sResp2, 150, 470, 60, 515, 100 * state.animationSpeed),
+      ]);
+
+      document.getElementById('sConns').textContent = '4';
+
+      // ── inetd: two forks ──
+      const telnetPortY = ctx.portYs[1];
+      const daytimePortY = ctx.portYs[2];
+      const telnetClientY = telnetPortY + 40;
+      const daytimeClientY = daytimePortY + 70;
+
+      // Telnet client
+      const iClient1 = drawText(iSvg, 20, telnetClientY - 5, 'Client', { fill: getColor('green'), size: 8, weight: 700 });
+      const iArrow1 = drawLine(iSvg, 50, telnetClientY, 150, telnetPortY, { stroke: getColor('green'), sw: 1.5, animated: true, marker: `url(#ah-green-i)` });
+      const iLabel1 = drawLabel(iSvg, 100, (telnetClientY + telnetPortY) / 2 - 8, ':23', getColor('green'));
+
+      // Daytime client
+      const iClient2 = drawText(iSvg, 20, daytimeClientY - 5, 'Client', { fill: getColor('orange'), size: 8, weight: 700 });
+      const iArrow2 = drawLine(iSvg, 50, daytimeClientY, 150, daytimePortY, { stroke: getColor('orange'), sw: 1.5, animated: true, marker: `url(#ah-orange-i)` });
+      const iLabel2 = drawLabel(iSvg, 100, (daytimeClientY + daytimePortY) / 2 - 8, ':13', getColor('orange'));
+
+      await Promise.all([
+        fadeIn(iClient1, 100 * state.animationSpeed), fadeIn(iLabel1, 100 * state.animationSpeed),
+        fadeIn(iClient2, 100 * state.animationSpeed), fadeIn(iLabel2, 100 * state.animationSpeed),
+      ]);
+      await Promise.all([
+        animLine(iArrow1, 50, telnetClientY, 150, telnetPortY, 100 * state.animationSpeed),
+        animLine(iArrow2, 50, daytimeClientY, 150, daytimePortY, 100 * state.animationSpeed),
+      ]);
+
+      // Fork both children
+      const fork1 = drawLine(iSvg, 350, telnetPortY, 420, telnetPortY - 20, { stroke: getColor('orange'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-orange-i)` });
+      const fork2 = drawLine(iSvg, 350, daytimePortY, 420, daytimePortY - 20, { stroke: getColor('orange'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-orange-i)` });
+      const forkL1 = drawLabel(iSvg, 385, telnetPortY - 30, 'fork()', getColor('orange'));
+      const forkL2 = drawLabel(iSvg, 385, daytimePortY + 20, 'fork()', getColor('orange'));
+
+      await Promise.all([fadeIn(forkL1, 100 * state.animationSpeed), fadeIn(forkL2, 100 * state.animationSpeed)]);
+      await Promise.all([
+        animLine(fork1, 350, telnetPortY, 420, telnetPortY - 20, 100 * state.animationSpeed),
+        animLine(fork2, 350, daytimePortY, 420, daytimePortY - 20, 100 * state.animationSpeed),
+      ]);
+
+      // Child boxes
+      const child1Box = drawRect(iSvg, 420, telnetPortY - 40, 70, 40, { stroke: getColor('green'), sw: 1.5 });
+      const child1Label = drawText(iSvg, 455, telnetPortY - 17, 'telnetd', { fill: getColor('green'), weight: 700, size: 8 });
+      const child2Box = drawRect(iSvg, 420, daytimePortY - 40, 70, 40, { stroke: getColor('orange'), sw: 1.5 });
+      const child2Label = drawText(iSvg, 455, daytimePortY - 17, 'daytimed', { fill: getColor('orange'), weight: 700, size: 8 });
+
+      await Promise.all([
+        fadeIn(child1Box, 200 * state.animationSpeed), fadeIn(child1Label, 150 * state.animationSpeed),
+        fadeIn(child2Box, 200 * state.animationSpeed), fadeIn(child2Label, 150 * state.animationSpeed),
+      ]);
+
+      document.getElementById('iConns').textContent = '4';
+      document.getElementById('iForks').textContent = '4';
+      setInetdProcCount(3);
+
+      // Responses
+      const iResp1 = drawLine(iSvg, 420, telnetPortY - 10, 50, telnetClientY + 10, { stroke: getColor('green'), sw: 1, dash: '4 3', animated: true, marker: `url(#ah-green-i)` });
+      const iResp2 = drawLine(iSvg, 420, daytimePortY - 10, 50, daytimeClientY + 10, { stroke: getColor('orange'), sw: 1, dash: '4 3', animated: true, marker: `url(#ah-orange-i)` });
+      await Promise.all([
+        animLine(iResp1, 420, telnetPortY - 10, 50, telnetClientY + 10, 150 * state.animationSpeed),
+        animLine(iResp2, 420, daytimePortY - 10, 50, daytimeClientY + 10, 150 * state.animationSpeed),
+      ]);
+
+      // Children fade
+      await sleep(80);
+      await Promise.all([
+        fadeOut(child1Box, 300 * state.animationSpeed), fadeOut(child1Label, 300 * state.animationSpeed),
+        fadeOut(child2Box, 300 * state.animationSpeed), fadeOut(child2Label, 300 * state.animationSpeed),
+      ]);
+      setInetdProcCount(1);
+
+      addAnnotation('idle', 'inetd returns to its select() loop, ready for the next connection. Children are reaped via SIGCHLD handler.', '<span class="syscall">waitpid()</span> <span class="arg">-1, WNOHANG</span><br><span class="syscall">select()</span> <span class="arg">\u2192 blocking, waiting for next connection...</span>');
+    }
+
+    // ── Main Run ──
+    async function run() {
+      if (state.running) return;
+      state.running = true;
+      const btn = document.getElementById('startBtn');
+      btn.disabled = true; btn.textContent = 'Running\u2026';
+
+      clearAll();
+
+      const ctx = await phaseSetup();
+      await sleep(80);
+      await phaseIdle();
+      await sleep(80);
+      await phaseTelnetConnection(ctx);
+      await sleep(80);
+      await phaseFtpConnection();
+      await sleep(80);
+      await phaseSimultaneous(ctx);
+
+      state.running = false;
+      btn.disabled = false; btn.textContent = 'Run';
+    }
+
+    document.getElementById('startBtn').addEventListener('click', run);
+    document.addEventListener('keydown', e => { if (e.key === 'Enter' && !state.running) run(); });
+  </script>
+</body>
+</html>
