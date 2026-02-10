@@ -198,7 +198,7 @@
     .annotation-phase.setup { color: var(--blue); }
     .annotation-phase.idle { color: var(--dim); }
     .annotation-phase.connection { color: var(--green); }
-    .annotation-phase.fork { color: var(--orange); }
+    .annotation-phase.fork { color: var(--dim); }
     .annotation-phase.simultaneous { color: var(--purple); }
 
     .annotation-desc {
@@ -352,6 +352,7 @@ daytime  stream  tcp  nowait  root  internal</pre>
               <marker id="ah-blue-i" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-blue" /></marker>
               <marker id="ah-green-i" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-green" /></marker>
               <marker id="ah-orange-i" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-orange" /></marker>
+              <marker id="ah-dim-i" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-dim" /></marker>
               <marker id="ah-purple-i" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><polygon points="0 0, 7 3.5, 0 7" class="af-purple" /></marker>
             </defs>
           </svg>
@@ -390,6 +391,7 @@ daytime  stream  tcp  nowait  root  internal</pre>
       document.querySelectorAll('.af-blue').forEach(el => el.setAttribute('fill', s.getPropertyValue('--blue').trim()));
       document.querySelectorAll('.af-green').forEach(el => el.setAttribute('fill', s.getPropertyValue('--green').trim()));
       document.querySelectorAll('.af-orange').forEach(el => el.setAttribute('fill', s.getPropertyValue('--orange').trim()));
+      document.querySelectorAll('.af-dim').forEach(el => el.setAttribute('fill', s.getPropertyValue('--dim').trim()));
       document.querySelectorAll('.af-purple').forEach(el => el.setAttribute('fill', s.getPropertyValue('--purple').trim()));
     }
     document.getElementById('darkBtn').addEventListener('click', () => setTheme('dark'));
@@ -701,8 +703,8 @@ daytime  stream  tcp  nowait  root  internal</pre>
       await animLine(iArrow, 60, 310, 150, 310, 100 * state.animationSpeed);
 
       // Fork visualization
-      const forkLine = drawLine(iSvg, 350, 310, 420, 310, { stroke: getColor('orange'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-orange-i)` });
-      const forkLabel = drawLabel(iSvg, 385, 300, 'fork()', getColor('orange'));
+      const forkLine = drawLine(iSvg, 350, 310, 420, 310, { stroke: getColor('dim'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-dim-i)` });
+      const forkLabel = drawLabel(iSvg, 385, 300, 'fork()', getColor('dim'));
       await fadeIn(forkLabel, 100 * state.animationSpeed);
       await animLine(forkLine, 350, 310, 420, 310, 100 * state.animationSpeed);
 
@@ -777,8 +779,8 @@ daytime  stream  tcp  nowait  root  internal</pre>
       await animLine(iArrow, 60, 220, 150, 220, 100 * state.animationSpeed);
 
       // Fork
-      const forkLine = drawLine(iSvg, 350, 220, 420, 220, { stroke: getColor('orange'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-orange-i)` });
-      const forkLabel = drawLabel(iSvg, 385, 210, 'fork()', getColor('orange'));
+      const forkLine = drawLine(iSvg, 350, 220, 420, 220, { stroke: getColor('dim'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-dim-i)` });
+      const forkLabel = drawLabel(iSvg, 385, 210, 'fork()', getColor('dim'));
       await fadeIn(forkLabel, 100 * state.animationSpeed);
       await animLine(forkLine, 350, 220, 420, 220, 100 * state.animationSpeed);
 
@@ -880,10 +882,10 @@ daytime  stream  tcp  nowait  root  internal</pre>
       ]);
 
       // Fork both children
-      const fork1 = drawLine(iSvg, 350, telnetPortY, 420, telnetPortY - 20, { stroke: getColor('orange'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-orange-i)` });
-      const fork2 = drawLine(iSvg, 350, daytimePortY, 420, daytimePortY - 20, { stroke: getColor('orange'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-orange-i)` });
-      const forkL1 = drawLabel(iSvg, 385, telnetPortY - 30, 'fork()', getColor('orange'));
-      const forkL2 = drawLabel(iSvg, 385, daytimePortY + 20, 'fork()', getColor('orange'));
+      const fork1 = drawLine(iSvg, 350, telnetPortY, 420, telnetPortY - 20, { stroke: getColor('dim'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-dim-i)` });
+      const fork2 = drawLine(iSvg, 350, daytimePortY, 420, daytimePortY - 20, { stroke: getColor('dim'), sw: 1.5, dash: '5 3', animated: true, marker: `url(#ah-dim-i)` });
+      const forkL1 = drawLabel(iSvg, 385, telnetPortY - 30, 'fork()', getColor('dim'));
+      const forkL2 = drawLabel(iSvg, 385, daytimePortY + 20, 'fork()', getColor('dim'));
 
       await Promise.all([fadeIn(forkL1, 100 * state.animationSpeed), fadeIn(forkL2, 100 * state.animationSpeed)]);
       await Promise.all([
