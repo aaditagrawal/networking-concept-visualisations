@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WDM & Optical Cross-Connects</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0c0c0c;
+      --bg-panel: #0f0f0f;
+      --bg-panel-alt: #131313;
+      --fg: #d4d4d4;
+      --dim: #525252;
+      --dimmer: #333;
+      --accent: #fff;
+      --line: #252525;
+      --lambda1: #ef4444;
+      --lambda2: #f97316;
+      --lambda3: #4ade80;
+      --lambda4: #4a9eff;
+      --lambda5: #a78bfa;
+      --lambda6: #f472b6;
+      --lambda7: #fbbf24;
+      --lambda8: #2dd4bf;
+      --error: #ef4444;
+    }
+
+    [data-theme="light"] {
+      --bg: #f5f5f5;
+      --bg-panel: #ffffff;
+      --bg-panel-alt: #fafafa;
+      --fg: #262626;
+      --dim: #737373;
+      --dimmer: #d4d4d4;
+      --accent: #000;
+      --line: #e5e5e5;
+      --lambda1: #dc2626;
+      --lambda2: #ea580c;
+      --lambda3: #16a34a;
+      --lambda4: #2563eb;
+      --lambda5: #7c3aed;
+      --lambda6: #db2777;
+      --lambda7: #d97706;
+      --lambda8: #0d9488;
+      --error: #dc2626;
+    }
+
+    body {
+      font-family: 'Geist Mono', 'SF Mono', 'Monaco', monospace;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+      padding: 3rem 2rem;
+      line-height: 1.5;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .container { max-width: 1800px; margin: 0 auto; }
+
+    header { text-align: center; margin-bottom: 3rem; position: relative; }
+
+    .theme-toggle {
+      position: absolute; top: 0; right: 0;
+      display: flex; align-items: center; gap: 0.75rem;
+      font-size: 0.75rem; color: var(--dim);
+      text-transform: uppercase; letter-spacing: 0.1em;
+    }
+    .theme-toggle button {
+      background: transparent; border: 1px solid var(--line); color: var(--fg);
+      padding: 0.5rem 0.75rem; font-family: inherit; font-size: 0.6875rem;
+      cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; transition: all 0.2s;
+    }
+    .theme-toggle button:hover { border-color: var(--dim); }
+    .theme-toggle button.active { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+
+    h1 {
+      font-size: 1.5rem; font-weight: 400; letter-spacing: 0.15em;
+      text-transform: uppercase; margin-bottom: 0.75rem; color: var(--accent);
+    }
+    .subtitle { color: var(--dim); font-size: 0.9375rem; letter-spacing: 0.05em; }
+
+    .controls {
+      display: flex; gap: 2rem; justify-content: center;
+      align-items: flex-end; margin-bottom: 2.5rem; flex-wrap: wrap;
+    }
+    .control-group { display: flex; flex-direction: column; gap: 0.625rem; }
+
+    label { font-size: 0.75rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.15em; }
+
+    select, input[type="number"] {
+      font-family: inherit; font-size: 1rem; padding: 0.875rem 1.25rem;
+      background: var(--bg); border: 1px solid var(--line); color: var(--fg);
+      outline: none; transition: border-color 0.3s, background 0.3s;
+    }
+    select { cursor: pointer; appearance: none; padding-right: 2rem; }
+    select:focus, input:focus { border-color: var(--dim); }
+    [data-theme="light"] select:focus, [data-theme="light"] input:focus { background: #fff; }
+    input[type="number"] { width: 140px; }
+
+    button.primary {
+      font-family: inherit; font-size: 0.8125rem; padding: 0.875rem 2.5rem;
+      background: var(--fg); color: var(--bg); border: none; cursor: pointer;
+      text-transform: uppercase; letter-spacing: 0.2em; transition: all 0.3s; font-weight: 700;
+    }
+    button.primary:hover { background: var(--accent); }
+    button.primary:disabled { opacity: 0.2; cursor: not-allowed; }
+
+    .viz-panel {
+      background: var(--bg-panel); border: 1px solid var(--line); padding: 2rem;
+      transition: background 0.3s, border-color 0.3s; margin-bottom: 2rem;
+    }
+    .viz-header {
+      display: flex; justify-content: space-between; align-items: baseline;
+      margin-bottom: 1.5rem; padding-bottom: 1.25rem; border-bottom: 1px solid var(--line);
+    }
+    .viz-title {
+      font-size: 0.9375rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.15em; color: var(--accent);
+    }
+    .viz-mode { font-size: 0.75rem; color: var(--dim); margin-top: 0.375rem; letter-spacing: 0.1em; }
+
+    .topology-status {
+      font-size: 0.75rem; color: var(--dim);
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .topology-container { position: relative; width: 100%; height: 380px; overflow: hidden; }
+    svg.topology-svg { width: 100%; height: 100%; }
+
+    .annotation-bar {
+      margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--line);
+      min-height: 2.5rem; display: flex; align-items: center; gap: 1rem;
+    }
+    .annotation-phase {
+      font-size: 0.75rem; color: var(--dim); text-transform: uppercase;
+      letter-spacing: 0.12em; flex-shrink: 0;
+    }
+    .annotation-text { font-size: 0.875rem; color: var(--fg); }
+
+    .bottom-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;
+    }
+
+    .channel-list { display: flex; flex-direction: column; gap: 1rem; }
+    .channel-row {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 0.75rem 1rem; border: 1px solid var(--line); background: var(--bg);
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .channel-color {
+      width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+    }
+    .channel-info { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; }
+    .channel-name { font-size: 0.875rem; font-weight: 700; color: var(--accent); }
+    .channel-wavelength { font-size: 0.75rem; color: var(--dim); letter-spacing: 0.05em; }
+    .channel-power {
+      font-size: 0.8125rem; letter-spacing: 0.05em; flex-shrink: 0; text-align: right;
+    }
+    .channel-ber {
+      font-size: 0.75rem; color: var(--dim); flex-shrink: 0; text-align: right; min-width: 120px;
+    }
+
+    .ber-panel-content { display: flex; flex-direction: column; gap: 1.5rem; }
+    .bit-stream-section { display: flex; flex-direction: column; gap: 0.75rem; }
+    .bit-stream-label {
+      font-size: 0.75rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.12em;
+    }
+    .bit-stream {
+      font-size: 1rem; font-weight: 700; letter-spacing: 0.2em;
+      line-height: 1.8; word-break: break-all; font-family: inherit;
+    }
+    .bit-stream .error-bit { color: var(--error); text-decoration: underline; }
+    .bit-stream .ok-bit { color: var(--fg); }
+
+    .eye-container { position: relative; width: 100%; height: 200px; }
+    .eye-container svg { width: 100%; height: 100%; }
+    .eye-label {
+      font-size: 0.75rem; color: var(--dim); text-transform: uppercase;
+      letter-spacing: 0.12em; margin-bottom: 0.75rem;
+    }
+
+    .ber-summary {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;
+      padding-top: 1rem; border-top: 1px solid var(--line);
+    }
+    .ber-stat { text-align: center; }
+    .ber-stat-value { font-size: 1.25rem; font-weight: 700; color: var(--accent); }
+    .ber-stat-label {
+      font-size: 0.6875rem; color: var(--dim); text-transform: uppercase;
+      letter-spacing: 0.1em; margin-top: 0.25rem;
+    }
+
+    .stats {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem;
+      background: var(--bg-panel); border: 1px solid var(--line);
+      padding: 2rem; text-align: center; margin-bottom: 2rem;
+      transition: background 0.3s, border-color 0.3s;
+    }
+    .stat { display: flex; flex-direction: column; gap: 0.375rem; }
+    .stat-value { font-size: 2.125rem; font-weight: 400; color: var(--accent); letter-spacing: 0.05em; }
+    .stat-value span { font-size: 1rem; }
+    .stat-value sup, .ber-stat-value sup, .channel-ber sup, .annotation-text sup {
+      font-size: 0.6em; vertical-align: super;
+    }
+    .stat-label {
+      font-size: 0.6875rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.15em;
+    }
+
+    .legend {
+      display: flex; justify-content: center; gap: 2.5rem; flex-wrap: wrap;
+      padding-top: 2rem; border-top: 1px solid var(--line);
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 0.625rem;
+      font-size: 0.75rem; color: var(--dim);
+    }
+    .legend-swatch { width: 24px; height: 4px; border-radius: 1px; }
+    .legend-swatch.dashed {
+      background: repeating-linear-gradient(
+        90deg, var(--dim) 0px, var(--dim) 4px, transparent 4px, transparent 7px
+      );
+    }
+    .legend-swatch.error-swatch { background: var(--error); }
+
+    @media (max-width: 1200px) {
+      .bottom-grid { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 768px) {
+      body { padding: 2rem 1rem; }
+      header { margin-bottom: 2rem; }
+      .theme-toggle { position: static; justify-content: center; margin-bottom: 1.5rem; }
+      h1 { font-size: 1.125rem; letter-spacing: 0.1em; }
+      .controls { gap: 1rem; }
+      .control-group { width: 100%; }
+      select, input[type="number"] { width: 100%; font-size: 0.9375rem; padding: 0.75rem 1rem; }
+      button.primary { width: 100%; }
+      .viz-panel { padding: 1.25rem; }
+      .topology-container { height: 280px; }
+      .annotation-bar { flex-direction: column; gap: 0.5rem; }
+      .stats { grid-template-columns: 1fr 1fr; gap: 1rem; padding: 1.25rem; }
+      .stat-value { font-size: 1.75rem; }
+      .legend { gap: 1.5rem; padding-top: 1.5rem; }
+      .legend-item { font-size: 0.6875rem; }
+    }
+    @media (max-width: 480px) {
+      body { padding: 1.5rem 0.75rem; }
+      .topology-container { height: 220px; }
+      .stats { grid-template-columns: 1fr; }
+      .channel-row { flex-wrap: wrap; }
+      .channel-ber { min-width: auto; width: 100%; text-align: left; }
+      .ber-summary { grid-template-columns: 1fr; }
+      .eye-container { height: 150px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="theme-toggle">
+        <span>Theme</span>
+        <button id="darkBtn" class="active">Dark</button>
+        <button id="lightBtn">Light</button>
+      </div>
+      <h1>WDM & Optical Cross-Connects</h1>
+      <p class="subtitle">Wavelength division multiplexing with bit error rate analysis</p>
+    </header>
+
+    <div class="controls">
+      <div class="control-group">
+        <label for="numChannels">Channels</label>
+        <select id="numChannels">
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
+          <option value="6">6</option>
+          <option value="8">8</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="spacingType">Channel Spacing</label>
+        <select id="spacingType">
+          <option value="dwdm" selected>DWDM (0.8 nm)</option>
+          <option value="cwdm">CWDM (20 nm)</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="fiberLength">Fiber Length (km)</label>
+        <input type="number" id="fiberLength" value="80" min="1" max="500">
+      </div>
+      <div class="control-group">
+        <label for="signalPower">Signal Power (dBm)</label>
+        <input type="number" id="signalPower" value="0" min="-10" max="10">
+      </div>
+      <div class="control-group">
+        <label for="animSpeed">Speed</label>
+        <select id="animSpeed">
+          <option value="4">Slow</option>
+          <option value="2.5" selected>Normal</option>
+          <option value="1.2">Fast</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <button class="primary" id="startBtn">Start Simulation</button>
+      </div>
+    </div>
+
+    <div class="viz-panel" id="topologyPanel">
+      <div class="viz-header">
+        <div>
+          <div class="viz-title">WDM System Topology</div>
+          <div class="viz-mode">Sender &rarr; MUX &rarr; Fiber &rarr; EDFA &rarr; OXC &rarr; Fiber &rarr; DEMUX &rarr; Receiver</div>
+        </div>
+        <div class="topology-status" id="topologyStatus">Idle</div>
+      </div>
+      <div class="topology-container">
+        <svg class="topology-svg" id="topSvg" viewBox="0 0 1200 360" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="annotation-bar">
+        <div class="annotation-phase" id="annPhase"></div>
+        <div class="annotation-text" id="annText"></div>
+      </div>
+    </div>
+
+    <div class="bottom-grid">
+      <div class="viz-panel" id="channelPanel">
+        <div class="viz-header">
+          <div>
+            <div class="viz-title">Channel Detail</div>
+            <div class="viz-mode">Per-wavelength power and BER</div>
+          </div>
+        </div>
+        <div class="channel-list" id="channelList"></div>
+      </div>
+
+      <div class="viz-panel" id="berPanel">
+        <div class="viz-header">
+          <div>
+            <div class="viz-title">Bit Error Analysis</div>
+            <div class="viz-mode">Transmitted vs received on channel 1</div>
+          </div>
+        </div>
+        <div class="ber-panel-content">
+          <div class="bit-stream-section">
+            <div class="bit-stream-label">Transmitted Bits (TX)</div>
+            <div class="bit-stream" id="txBits"></div>
+          </div>
+          <div class="bit-stream-section">
+            <div class="bit-stream-label">Received Bits (RX)</div>
+            <div class="bit-stream" id="rxBits"></div>
+          </div>
+          <div>
+            <div class="eye-label">Eye Diagram (Signal Quality)</div>
+            <div class="eye-container">
+              <svg id="eyeSvg" viewBox="0 0 400 180" preserveAspectRatio="xMidYMid meet"></svg>
+            </div>
+          </div>
+          <div class="ber-summary">
+            <div class="ber-stat">
+              <div class="ber-stat-value" id="berBitsTotal">0</div>
+              <div class="ber-stat-label">Bits Sent</div>
+            </div>
+            <div class="ber-stat">
+              <div class="ber-stat-value" id="berErrors">0</div>
+              <div class="ber-stat-label">Errors</div>
+            </div>
+            <div class="ber-stat">
+              <div class="ber-stat-value" id="berRate">--</div>
+              <div class="ber-stat-label">BER</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value" id="statChannels">0</div>
+        <div class="stat-label">Active Channels</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="statBer">--</div>
+        <div class="stat-label">Avg BER</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="statThroughput">0 <span>Gbps</span></div>
+        <div class="stat-label">Aggregate Throughput</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="statQuality">--</div>
+        <div class="stat-label">Signal Quality</div>
+      </div>
+    </div>
+
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <script>
+    const NS = 'http://www.w3.org/2000/svg';
+    const LAMBDA_VARS = ['lambda1','lambda2','lambda3','lambda4','lambda5','lambda6','lambda7','lambda8'];
+    const WAVELENGTHS_DWDM = [1550.12, 1550.92, 1551.72, 1552.52, 1553.33, 1554.13, 1554.94, 1555.75];
+    const WAVELENGTHS_CWDM = [1310, 1330, 1350, 1370, 1390, 1410, 1430, 1450];
+    const FIBER_ATTN = 0.2;     // dB/km at 1550nm
+    const EDFA_GAIN = 20;       // dB
+    const EDFA_NF = 5;          // dB noise figure
+    const BITS_PER_CHANNEL = 48;
+    const CHANNEL_RATE = 10;    // Gbps per channel
+
+    const state = { running: false, animationSpeed: 2.5 };
+
+    // --- Theme ---
+    function setTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      localStorage.setItem('theme', t);
+      document.getElementById('darkBtn').classList.toggle('active', t === 'dark');
+      document.getElementById('lightBtn').classList.toggle('active', t === 'light');
+    }
+    document.getElementById('darkBtn').addEventListener('click', () => setTheme('dark'));
+    document.getElementById('lightBtn').addEventListener('click', () => setTheme('light'));
+    setTheme(localStorage.getItem('theme') || 'dark');
+
+    // --- Utilities ---
+    function getColor(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue('--' + name).trim();
+    }
+    function svgEl(tag, attrs) {
+      const el = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+      return el;
+    }
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms * state.animationSpeed)); }
+    function fadeIn(el, dur = 300) {
+      el.setAttribute('opacity', '0');
+      const t0 = performance.now();
+      return new Promise(resolve => {
+        (function step(now) {
+          const p = Math.min((now - t0) / dur, 1);
+          el.setAttribute('opacity', String(p));
+          p < 1 ? requestAnimationFrame(step) : resolve();
+        })(t0);
+      });
+    }
+
+    // --- Annotation ---
+    function setAnnotation(phase, text) {
+      document.getElementById('annPhase').textContent = phase;
+      document.getElementById('annText').innerHTML = text;
+    }
+    function setStatus(text) {
+      document.getElementById('topologyStatus').textContent = text;
+    }
+
+    // --- Topology layout (SVG coords inside viewBox 0 0 1200 360) ---
+    function layoutPositions(n) {
+      const gap = Math.min(50, 260 / (n + 1));
+      const topY = (360 - (n - 1) * gap) / 2;
+      const yList = Array.from({ length: n }, (_, i) => topY + i * gap);
+      return {
+        yList,
+        tx:    { x: 20,  w: 70,  h: 28 },
+        mux:   { x: 160, w: 60 },
+        fiber1:{ x1: 220, x2: 430 },
+        edfa:  { x: 430, w: 70, h: 32 },
+        oxc:   { x: 520, w: 160 },
+        fiber2:{ x1: 660, x2: 870 },
+        demux: { x: 870, w: 60 },
+        rx:    { x: 1000, w: 70, h: 28 },
+        midY:  180,
+      };
+    }
+
+    // --- Draw static topology ---
+    function drawTopology(numCh) {
+      const svg = document.getElementById('topSvg');
+      svg.innerHTML = '';
+      const L = layoutPositions(numCh);
+
+      // Transmitters
+      const txGroups = [];
+      L.yList.forEach((y, i) => {
+        const g = svgEl('g', { class: 'tx-group', 'data-ch': i });
+        const rect = svgEl('rect', {
+          x: L.tx.x, y: y - L.tx.h / 2, width: L.tx.w, height: L.tx.h, rx: 4,
+          fill: 'none', stroke: getColor(LAMBDA_VARS[i]), 'stroke-width': 1.5, opacity: 0.4
+        });
+        const label = svgEl('text', {
+          x: L.tx.x + L.tx.w / 2, y: y + 5, 'text-anchor': 'middle',
+          fill: getColor(LAMBDA_VARS[i]), 'font-size': '13', 'font-family': 'Geist Mono, monospace',
+          'font-weight': '700', opacity: 0.4
+        });
+        label.textContent = `TX${i + 1}`;
+        g.append(rect, label);
+        svg.appendChild(g);
+        txGroups.push(g);
+
+        // TX to MUX line
+        const line = svgEl('line', {
+          x1: L.tx.x + L.tx.w, y1: y, x2: L.mux.x, y2: y,
+          stroke: getColor(LAMBDA_VARS[i]), 'stroke-width': 1.5, opacity: 0.15
+        });
+        svg.appendChild(line);
+      });
+
+      // MUX trapezoid
+      const muxTop = L.yList[0] - 20;
+      const muxBot = L.yList[numCh - 1] + 20;
+      const muxPoly = svgEl('polygon', {
+        points: `${L.mux.x},${muxTop} ${L.mux.x + L.mux.w},${L.midY - 15} ${L.mux.x + L.mux.w},${L.midY + 15} ${L.mux.x},${muxBot}`,
+        fill: 'none', stroke: getColor('dim'), 'stroke-width': 1.5
+      });
+      svg.appendChild(muxPoly);
+      const muxLabel = svgEl('text', {
+        x: L.mux.x + L.mux.w / 2 - 4, y: L.midY + 5, 'text-anchor': 'middle',
+        fill: getColor('dim'), 'font-size': '11', 'font-family': 'Geist Mono, monospace',
+        'letter-spacing': '0.1em'
+      });
+      muxLabel.textContent = 'MUX';
+      svg.appendChild(muxLabel);
+
+      // Fiber span 1
+      const f1 = svgEl('line', {
+        x1: L.fiber1.x1, y1: L.midY, x2: L.fiber1.x2, y2: L.midY,
+        stroke: getColor('dimmer'), 'stroke-width': 3, 'stroke-linecap': 'round'
+      });
+      svg.appendChild(f1);
+      const f1Label = svgEl('text', {
+        x: (L.fiber1.x1 + L.fiber1.x2) / 2, y: L.midY - 16, 'text-anchor': 'middle',
+        fill: getColor('dim'), 'font-size': '10', 'font-family': 'Geist Mono, monospace',
+        'letter-spacing': '0.1em'
+      });
+      f1Label.textContent = 'FIBER SPAN 1';
+      svg.appendChild(f1Label);
+
+      // EDFA box
+      const edfaRect = svgEl('rect', {
+        x: L.edfa.x, y: L.midY - L.edfa.h / 2, width: L.edfa.w, height: L.edfa.h, rx: 4,
+        fill: 'none', stroke: getColor('dim'), 'stroke-width': 1.5
+      });
+      svg.appendChild(edfaRect);
+      const edfaLabel = svgEl('text', {
+        x: L.edfa.x + L.edfa.w / 2, y: L.midY + 5, 'text-anchor': 'middle',
+        fill: getColor('dim'), 'font-size': '11', 'font-family': 'Geist Mono, monospace'
+      });
+      edfaLabel.textContent = 'EDFA';
+      svg.appendChild(edfaLabel);
+
+      // EDFA to OXC: fan-out lines from midY to each input port
+      L.yList.forEach((y, i) => {
+        svg.appendChild(svgEl('line', {
+          x1: L.edfa.x + L.edfa.w, y1: L.midY, x2: L.oxc.x, y2: y,
+          stroke: getColor(LAMBDA_VARS[i]), 'stroke-width': 1, opacity: 0.12
+        }));
+      });
+
+      // OXC box — prominent with labeled ports
+      const oxcTop = L.yList[0] - 30;
+      const oxcBot = L.yList[numCh - 1] + 30;
+      const oxcRect = svgEl('rect', {
+        x: L.oxc.x, y: oxcTop, width: L.oxc.w, height: oxcBot - oxcTop, rx: 6,
+        fill: 'none', stroke: getColor('accent'), 'stroke-width': 2, opacity: 0.5
+      });
+      svg.appendChild(oxcRect);
+      // Title above
+      const oxcTitle = svgEl('text', {
+        x: L.oxc.x + L.oxc.w / 2, y: oxcTop - 12, 'text-anchor': 'middle',
+        fill: getColor('accent'), 'font-size': '13', 'font-family': 'Geist Mono, monospace',
+        'font-weight': '700', 'letter-spacing': '0.15em', opacity: 0.8
+      });
+      oxcTitle.textContent = 'OPTICAL CROSS-CONNECT';
+      svg.appendChild(oxcTitle);
+      // Subtitle
+      const oxcSub = svgEl('text', {
+        x: L.oxc.x + L.oxc.w / 2, y: oxcBot + 16, 'text-anchor': 'middle',
+        fill: getColor('dim'), 'font-size': '9', 'font-family': 'Geist Mono, monospace',
+        'letter-spacing': '0.08em'
+      });
+      oxcSub.textContent = 'ALL-OPTICAL SWITCHING';
+      svg.appendChild(oxcSub);
+
+      // OXC input/output port indicators with labels
+      L.yList.forEach((y, i) => {
+        // Input port: circle + label
+        svg.appendChild(svgEl('circle', {
+          cx: L.oxc.x, cy: y, r: 5,
+          fill: getColor(LAMBDA_VARS[i]), opacity: 0.5
+        }));
+        const inLabel = svgEl('text', {
+          x: L.oxc.x + 14, y: y + 4, fill: getColor(LAMBDA_VARS[i]),
+          'font-size': '10', 'font-family': 'Geist Mono, monospace', 'font-weight': '700', opacity: 0.6
+        });
+        inLabel.textContent = `\u03BB${i + 1}`;
+        svg.appendChild(inLabel);
+
+        // Output port: circle + label
+        svg.appendChild(svgEl('circle', {
+          cx: L.oxc.x + L.oxc.w, cy: y, r: 5,
+          fill: getColor(LAMBDA_VARS[i]), opacity: 0.5
+        }));
+        const outLabel = svgEl('text', {
+          x: L.oxc.x + L.oxc.w - 14, y: y + 4, 'text-anchor': 'end',
+          fill: getColor(LAMBDA_VARS[i]),
+          'font-size': '10', 'font-family': 'Geist Mono, monospace', 'font-weight': '700', opacity: 0.6
+        });
+        outLabel.textContent = `\u03BB${i + 1}`;
+        svg.appendChild(outLabel);
+      });
+
+      // OXC output ports to Fiber span 2: fan-in lines
+      L.yList.forEach((y, i) => {
+        svg.appendChild(svgEl('line', {
+          x1: L.oxc.x + L.oxc.w, y1: y, x2: L.fiber2.x1, y2: L.midY,
+          stroke: getColor(LAMBDA_VARS[i]), 'stroke-width': 1, opacity: 0.12
+        }));
+      });
+
+      // Fiber span 2
+      const f2 = svgEl('line', {
+        x1: L.fiber2.x1, y1: L.midY, x2: L.fiber2.x2, y2: L.midY,
+        stroke: getColor('dimmer'), 'stroke-width': 3, 'stroke-linecap': 'round'
+      });
+      svg.appendChild(f2);
+      const f2Label = svgEl('text', {
+        x: (L.fiber2.x1 + L.fiber2.x2) / 2, y: L.midY - 16, 'text-anchor': 'middle',
+        fill: getColor('dim'), 'font-size': '10', 'font-family': 'Geist Mono, monospace',
+        'letter-spacing': '0.1em'
+      });
+      f2Label.textContent = 'FIBER SPAN 2';
+      svg.appendChild(f2Label);
+
+      // DEMUX trapezoid (mirror of MUX)
+      const dmxPoly = svgEl('polygon', {
+        points: `${L.demux.x},${L.midY - 15} ${L.demux.x + L.demux.w},${muxTop} ${L.demux.x + L.demux.w},${muxBot} ${L.demux.x},${L.midY + 15}`,
+        fill: 'none', stroke: getColor('dim'), 'stroke-width': 1.5
+      });
+      svg.appendChild(dmxPoly);
+      const dmxLabel = svgEl('text', {
+        x: L.demux.x + L.demux.w / 2 + 4, y: L.midY + 5, 'text-anchor': 'middle',
+        fill: getColor('dim'), 'font-size': '10', 'font-family': 'Geist Mono, monospace',
+        'letter-spacing': '0.08em'
+      });
+      dmxLabel.textContent = 'DEMUX';
+      svg.appendChild(dmxLabel);
+
+      // DEMUX to RX lines
+      L.yList.forEach((y, i) => {
+        svg.appendChild(svgEl('line', {
+          x1: L.demux.x + L.demux.w, y1: y, x2: L.rx.x, y2: y,
+          stroke: getColor(LAMBDA_VARS[i]), 'stroke-width': 1.5, opacity: 0.15
+        }));
+      });
+
+      // Receivers
+      const rxGroups = [];
+      L.yList.forEach((y, i) => {
+        const g = svgEl('g', { class: 'rx-group', 'data-ch': i });
+        const rect = svgEl('rect', {
+          x: L.rx.x, y: y - L.rx.h / 2, width: L.rx.w, height: L.rx.h, rx: 4,
+          fill: 'none', stroke: getColor(LAMBDA_VARS[i]), 'stroke-width': 1.5, opacity: 0.4
+        });
+        const label = svgEl('text', {
+          x: L.rx.x + L.rx.w / 2, y: y + 5, 'text-anchor': 'middle',
+          fill: getColor(LAMBDA_VARS[i]), 'font-size': '13', 'font-family': 'Geist Mono, monospace',
+          'font-weight': '700', opacity: 0.4
+        });
+        label.textContent = `RX${i + 1}`;
+        g.append(rect, label);
+        svg.appendChild(g);
+        rxGroups.push(g);
+      });
+
+      return { txGroups, rxGroups, L };
+    }
+
+    // --- Animate a pulse along a path ---
+    function animatePulse(svg, points, color, dur) {
+      const circle = svgEl('circle', { r: 5, fill: color, opacity: 0 });
+      svg.appendChild(circle);
+      const totalLen = points.reduce((s, p, i) => {
+        if (i === 0) return 0;
+        return s + Math.hypot(p[0] - points[i-1][0], p[1] - points[i-1][1]);
+      }, 0);
+      const t0 = performance.now();
+      return new Promise(resolve => {
+        (function step(now) {
+          const p = Math.min((now - t0) / dur, 1);
+          let d = p * totalLen, segStart = 0;
+          circle.setAttribute('opacity', p < 0.05 ? String(p / 0.05) : p > 0.95 ? String((1 - p) / 0.05) : '1');
+          for (let i = 1; i < points.length; i++) {
+            const segLen = Math.hypot(points[i][0] - points[i-1][0], points[i][1] - points[i-1][1]);
+            if (segStart + segLen >= d) {
+              const t = (d - segStart) / segLen;
+              circle.setAttribute('cx', String(points[i-1][0] + (points[i][0] - points[i-1][0]) * t));
+              circle.setAttribute('cy', String(points[i-1][1] + (points[i][1] - points[i-1][1]) * t));
+              break;
+            }
+            segStart += segLen;
+          }
+          if (p < 1) requestAnimationFrame(step);
+          else { circle.remove(); resolve(); }
+        })(t0);
+      });
+    }
+
+    // --- Draw OXC internal switching lines ---
+    function drawOxcSwitching(svg, L, yList, switchMap, numCh) {
+      const elements = [];
+      const inX = L.oxc.x + 38;
+      const outX = L.oxc.x + L.oxc.w - 38;
+      for (let i = 0; i < numCh; i++) {
+        const outIdx = switchMap[i];
+        const isCrossed = i !== outIdx;
+        const line = svgEl('line', {
+          x1: inX, y1: yList[i], x2: outX, y2: yList[outIdx],
+          stroke: getColor(LAMBDA_VARS[i]),
+          'stroke-width': isCrossed ? 3 : 2,
+          'stroke-linecap': 'round',
+          opacity: 0
+        });
+        svg.appendChild(line);
+        elements.push(line);
+
+        // "CROSS" label on swapped lines
+        if (isCrossed && i < outIdx) {
+          const midX = (inX + outX) / 2;
+          const midY = (yList[i] + yList[outIdx]) / 2;
+          const crossLabel = svgEl('text', {
+            x: midX, y: midY + 4, 'text-anchor': 'middle',
+            fill: getColor('accent'), 'font-size': '9', 'font-family': 'Geist Mono, monospace',
+            'font-weight': '700', 'letter-spacing': '0.1em', opacity: 0
+          });
+          crossLabel.textContent = 'CROSS';
+          svg.appendChild(crossLabel);
+          elements.push(crossLabel);
+        }
+      }
+      return elements;
+    }
+
+    // --- BER calculation (OSNR-based model) ---
+    // OSNR per span = P_launch + 58 - NF - span_loss  (dB, ref 12.5 GHz)
+    // Cascaded: OSNR_total = OSNR_per_span - 10*log10(num_spans)
+    function calcBER(signalPower_dBm, fiberLengthPerSpan_km, spacing, chIndex, numCh) {
+      const numSpans = 2;
+      const spanLoss = FIBER_ATTN * fiberLengthPerSpan_km;
+      const osnrPerSpan = signalPower_dBm + 58 - EDFA_NF - spanLoss;
+      const osnrTotal = osnrPerSpan - 10 * Math.log10(numSpans);
+      const crosstalkPenalty = spacing === 'dwdm' ? 0.5 * (numCh - 1) : 0.1 * (numCh - 1);
+      const effectiveOsnr = osnrTotal - crosstalkPenalty;
+      const snr_linear = Math.pow(10, effectiveOsnr / 10);
+      const ber = 0.5 * erfc(Math.sqrt(snr_linear / 2));
+      const powerAfterEdfa = signalPower_dBm - spanLoss + EDFA_GAIN;
+      return { ber: Math.max(ber, 1e-15), snr_dB: effectiveOsnr, powerAfterEdfa, attenuation: spanLoss };
+    }
+    function erfc(x) {
+      const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741, a4 = -1.453152027, a5 = 1.061405429;
+      const p = 0.3275911;
+      const sign = x < 0 ? -1 : 1;
+      x = Math.abs(x);
+      const t = 1 / (1 + p * x);
+      const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+      return 1 - sign * y;
+    }
+
+    // --- BER formatting with HTML <sup> tags ---
+    function formatBER(ber) {
+      if (ber <= 0) return '0';
+      if (ber < 1e-15) return '&lt;10<sup>-15</sup>';
+      const exp = Math.floor(Math.log10(ber));
+      const mantissa = ber / Math.pow(10, exp);
+      return `${mantissa.toFixed(1)}\u00D710<sup>${exp}</sup>`;
+    }
+
+    function generateBits(n) {
+      return Array.from({ length: n }, () => Math.random() < 0.5 ? 1 : 0);
+    }
+    function injectErrors(bits, ber) {
+      return bits.map(b => Math.random() < ber ? (b === 1 ? 0 : 1) : b);
+    }
+
+    // --- Channel detail UI ---
+    function buildChannelList(channels) {
+      const list = document.getElementById('channelList');
+      list.innerHTML = '';
+      channels.forEach((ch, i) => {
+        const row = document.createElement('div');
+        row.className = 'channel-row';
+        row.id = `ch-row-${i}`;
+        row.innerHTML = `
+          <div class="channel-color" style="background:var(--${LAMBDA_VARS[i]})"></div>
+          <div class="channel-info">
+            <div class="channel-name">&lambda;${i + 1}</div>
+            <div class="channel-wavelength">${ch.wavelength.toFixed(2)} nm</div>
+          </div>
+          <div class="channel-power" id="ch-power-${i}" style="color:var(--${LAMBDA_VARS[i]})">-- dBm</div>
+          <div class="channel-ber" id="ch-ber-${i}">BER: --</div>
+        `;
+        list.appendChild(row);
+      });
+    }
+
+    // --- Bit stream display ---
+    function displayBits(containerId, bits, errors) {
+      const el = document.getElementById(containerId);
+      el.innerHTML = '';
+      bits.forEach((b, i) => {
+        const span = document.createElement('span');
+        span.textContent = b;
+        span.className = (errors && errors[i]) ? 'error-bit' : 'ok-bit';
+        el.appendChild(span);
+      });
+    }
+
+    // --- Eye diagram ---
+    function drawEyeDiagram(snr_dB) {
+      const svg = document.getElementById('eyeSvg');
+      svg.innerHTML = '';
+
+      // background
+      svg.appendChild(svgEl('rect', { x: 0, y: 0, width: 400, height: 180, fill: 'none' }));
+
+      // Grid lines
+      [45, 90, 135].forEach(y => {
+        svg.appendChild(svgEl('line', {
+          x1: 10, y1: y, x2: 390, y2: y,
+          stroke: getColor('line'), 'stroke-width': 0.5
+        }));
+      });
+      // threshold label
+      const threshLabel = svgEl('text', {
+        x: 395, y: 93, fill: getColor('dim'), 'font-size': '8',
+        'font-family': 'Geist Mono, monospace', 'text-anchor': 'end'
+      });
+      threshLabel.textContent = 'THRESHOLD';
+      svg.appendChild(threshLabel);
+
+      const noise = Math.max(0.02, 1 / Math.pow(10, Math.max(snr_dB, 5) / 20));
+      const traces = 40;
+      const bits = 6;
+      const segW = 380 / bits;
+
+      for (let t = 0; t < traces; t++) {
+        const seq = generateBits(bits + 1);
+        let d = '';
+        for (let b = 0; b < bits; b++) {
+          const x0 = 10 + b * segW;
+          const x1 = 10 + (b + 1) * segW;
+          const y0 = seq[b] === 1 ? 30 : 150;
+          const y1 = seq[b + 1] === 1 ? 30 : 150;
+          const n0 = (Math.random() - 0.5) * noise * 200;
+          const n1 = (Math.random() - 0.5) * noise * 200;
+          const cy0 = Math.max(10, Math.min(170, y0 + n0));
+          const cy1 = Math.max(10, Math.min(170, y1 + n1));
+          if (b === 0) d += `M${x0},${cy0}`;
+          d += ` C${x0 + segW * 0.4},${cy0} ${x1 - segW * 0.4},${cy1} ${x1},${cy1}`;
+        }
+        svg.appendChild(svgEl('path', {
+          d, fill: 'none', stroke: getColor('lambda3'), 'stroke-width': 0.8, opacity: 0.25
+        }));
+      }
+
+      // Eye opening label
+      const eyeOpen = Math.max(0, Math.min(100, (snr_dB - 5) * 4));
+      const openLabel = svgEl('text', {
+        x: 200, y: 95, fill: getColor('accent'), 'font-size': '13',
+        'font-family': 'Geist Mono, monospace', 'text-anchor': 'middle',
+        'font-weight': '700', opacity: eyeOpen > 40 ? 0.7 : 0.3
+      });
+      openLabel.textContent = eyeOpen > 60 ? 'OPEN' : eyeOpen > 30 ? 'CLOSING' : 'CLOSED';
+      svg.appendChild(openLabel);
+    }
+
+    // --- Build OXC switch map (identity with one swap for visual interest) ---
+    function buildSwitchMap(n) {
+      const map = Array.from({ length: n }, (_, i) => i);
+      if (n >= 3) { const t = map[1]; map[1] = map[2]; map[2] = t; }
+      return map;
+    }
+
+    // --- Main simulation ---
+    async function runSimulation() {
+      if (state.running) return;
+      state.running = true;
+      const btn = document.getElementById('startBtn');
+      btn.disabled = true;
+      btn.textContent = 'Running...';
+      setStatus('Running');
+
+      const numCh = parseInt(document.getElementById('numChannels').value);
+      const spacing = document.getElementById('spacingType').value;
+      const fiberLen = Math.max(1, parseInt(document.getElementById('fiberLength').value) || 80);
+      const sigPower = parseFloat(document.getElementById('signalPower').value) || 0;
+      state.animationSpeed = parseFloat(document.getElementById('animSpeed').value) || 2.5;
+
+      const wavelengths = spacing === 'dwdm' ? WAVELENGTHS_DWDM : WAVELENGTHS_CWDM;
+      const channels = Array.from({ length: numCh }, (_, i) => ({
+        id: i,
+        wavelength: wavelengths[i],
+        txBits: generateBits(BITS_PER_CHANNEL),
+        rxBits: [],
+        ber: 0,
+        snr: 0,
+        power: sigPower,
+      }));
+
+      const switchMap = buildSwitchMap(numCh);
+
+      buildChannelList(channels);
+      document.getElementById('txBits').innerHTML = '';
+      document.getElementById('rxBits').innerHTML = '';
+      document.getElementById('berBitsTotal').textContent = '0';
+      document.getElementById('berErrors').textContent = '0';
+      document.getElementById('berRate').textContent = '--';
+      document.getElementById('statChannels').textContent = '0';
+      document.getElementById('statBer').textContent = '--';
+      document.getElementById('statThroughput').innerHTML = '0 <span>Gbps</span>';
+      document.getElementById('statQuality').textContent = '--';
+
+      const { txGroups, rxGroups, L } = drawTopology(numCh);
+      const svg = document.getElementById('topSvg');
+
+      // Phase 1: Generate bit sequences
+      setAnnotation('Phase 1', `Generating ${BITS_PER_CHANNEL}-bit sequences at ${numCh} transmitters. Each TX modulates data onto a unique wavelength.`);
+      for (let i = 0; i < numCh; i++) {
+        const els = txGroups[i].querySelectorAll('rect, text');
+        els.forEach(e => e.setAttribute('opacity', '1'));
+        await sleep(120);
+      }
+      await sleep(300);
+
+      // Phase 2: Modulate and transmit to MUX
+      setAnnotation('Phase 2', `Modulating data onto optical carriers. Each channel uses a distinct wavelength in the ${spacing.toUpperCase()} grid (${spacing === 'dwdm' ? '0.8' : '20'} nm spacing).`);
+      const muxPromises = [];
+      for (let i = 0; i < numCh; i++) {
+        const y = L.yList[i];
+        const color = getColor(LAMBDA_VARS[i]);
+        const pts = [[L.tx.x + L.tx.w, y], [L.mux.x, y]];
+        muxPromises.push(animatePulse(svg, pts, color, 400 * state.animationSpeed));
+      }
+      await Promise.all(muxPromises);
+      await sleep(200);
+
+      // Phase 3: Wavelength multiplexing
+      setAnnotation('Phase 3', `Wavelength multiplexing: combining ${numCh} wavelengths onto a single optical fiber. Each \u03BB occupies its own frequency slot \u2014 no interference if spacing is sufficient.`);
+      const combPromises = [];
+      for (let i = 0; i < numCh; i++) {
+        const color = getColor(LAMBDA_VARS[i]);
+        const pts = [[L.mux.x, L.yList[i]], [L.mux.x + L.mux.w, L.midY]];
+        combPromises.push(animatePulse(svg, pts, color, 300 * state.animationSpeed));
+      }
+      await Promise.all(combPromises);
+      await sleep(200);
+
+      // Phase 4: Fiber transmission span 1
+      setAnnotation('Phase 4', `Transmitting through ${fiberLen} km fiber. Attenuation: ${FIBER_ATTN} dB/km \u2192 total loss ${(FIBER_ATTN * fiberLen).toFixed(1)} dB. Signal power degrades with distance.`);
+      const fiberPromises1 = [];
+      for (let i = 0; i < numCh; i++) {
+        const color = getColor(LAMBDA_VARS[i]);
+        const pts = [[L.fiber1.x1, L.midY], [L.edfa.x, L.midY]];
+        fiberPromises1.push(animatePulse(svg, pts, color, 600 * state.animationSpeed));
+        await sleep(60);
+      }
+      await Promise.all(fiberPromises1);
+
+      // Update channel powers after fiber
+      channels.forEach((ch, i) => {
+        ch.power = sigPower - FIBER_ATTN * fiberLen;
+        document.getElementById(`ch-power-${i}`).textContent = `${ch.power.toFixed(1)} dBm`;
+      });
+      await sleep(200);
+
+      // Phase 5: EDFA amplification
+      setAnnotation('Phase 5', `EDFA amplification: +${EDFA_GAIN} dB gain restores signal power. However, amplified spontaneous emission (ASE) noise is added (noise figure: ${EDFA_NF} dB). This limits achievable BER.`);
+      // Flash EDFA box
+      const edfaEl = svg.querySelector(`rect[x="${L.edfa.x}"]`);
+      if (edfaEl) {
+        edfaEl.setAttribute('stroke', getColor('accent'));
+        edfaEl.setAttribute('stroke-width', '2.5');
+        await sleep(400);
+        edfaEl.setAttribute('stroke', getColor('dim'));
+        edfaEl.setAttribute('stroke-width', '1.5');
+      }
+      channels.forEach((ch, i) => {
+        ch.power += EDFA_GAIN;
+        document.getElementById(`ch-power-${i}`).textContent = `${ch.power.toFixed(1)} dBm`;
+      });
+
+      // Pulses from EDFA → fan out to individual OXC input ports
+      const eToOPromises = [];
+      for (let i = 0; i < numCh; i++) {
+        const color = getColor(LAMBDA_VARS[i]);
+        const pts = [[L.edfa.x + L.edfa.w, L.midY], [L.oxc.x, L.yList[i]]];
+        eToOPromises.push(animatePulse(svg, pts, color, 350 * state.animationSpeed));
+        await sleep(50);
+      }
+      await Promise.all(eToOPromises);
+      await sleep(200);
+
+      // Phase 6: OXC switching
+      const isIdentity = switchMap.every((v, i) => v === i);
+      const swappedPairs = [];
+      for (let i = 0; i < numCh; i++) {
+        if (switchMap[i] !== i && i < switchMap[i]) {
+          swappedPairs.push(`\u03BB${i + 1}\u21D4\u03BB${switchMap[i] + 1}`);
+        }
+      }
+      const switchDesc = isIdentity
+        ? 'All wavelengths pass through to the same output ports (bar state).'
+        : `${swappedPairs.join(', ')} are cross-connected \u2014 routed to swapped output ports.`;
+      setAnnotation('Phase 6', `Optical Cross-Connect: routing wavelengths without electrical conversion. ${switchDesc}`);
+
+      // Flash OXC box to draw attention
+      const oxcEl = svg.querySelector(`rect[x="${L.oxc.x}"]`);
+      if (oxcEl) {
+        oxcEl.setAttribute('opacity', '0.9');
+        oxcEl.setAttribute('stroke-width', '3');
+        await sleep(300);
+        oxcEl.setAttribute('opacity', '0.5');
+        oxcEl.setAttribute('stroke-width', '2');
+      }
+
+      // Draw OXC internal switching lines one by one
+      const oxcLines = drawOxcSwitching(svg, L, L.yList, switchMap, numCh);
+      for (const el of oxcLines) {
+        await fadeIn(el, 250);
+        await sleep(80);
+      }
+      await sleep(400);
+
+      // Animate pulses through OXC internal paths then out to fiber
+      const oxcOutPromises = [];
+      for (let i = 0; i < numCh; i++) {
+        const color = getColor(LAMBDA_VARS[i]);
+        const outIdx = switchMap[i];
+        // Path: OXC output port → converge to fiber midY
+        const pts = [[L.oxc.x + L.oxc.w, L.yList[outIdx]], [L.fiber2.x1, L.midY]];
+        oxcOutPromises.push(animatePulse(svg, pts, color, 300 * state.animationSpeed));
+        await sleep(50);
+      }
+      await Promise.all(oxcOutPromises);
+
+      // Phase 7: Fiber span 2
+      setAnnotation('Phase 7', `Second fiber span: signal travels another ${fiberLen} km. Additional attenuation of ${(FIBER_ATTN * fiberLen).toFixed(1)} dB applied.`);
+      const fiberPromises2 = [];
+      for (let i = 0; i < numCh; i++) {
+        const color = getColor(LAMBDA_VARS[i]);
+        fiberPromises2.push(animatePulse(svg, [[L.fiber2.x1, L.midY], [L.fiber2.x2, L.midY]], color, 500 * state.animationSpeed));
+        await sleep(50);
+      }
+      await Promise.all(fiberPromises2);
+      await sleep(200);
+
+      // Phase 8: Demultiplex
+      setAnnotation('Phase 8', 'Demultiplexing: separating combined wavelengths back into individual channels using an arrayed waveguide grating (AWG) or thin-film filter.');
+      const dmxPromises = [];
+      for (let i = 0; i < numCh; i++) {
+        const color = getColor(LAMBDA_VARS[i]);
+        const outIdx = switchMap[i];
+        dmxPromises.push(animatePulse(svg, [[L.demux.x, L.midY], [L.demux.x + L.demux.w, L.yList[outIdx]]], color, 300 * state.animationSpeed));
+      }
+      await Promise.all(dmxPromises);
+
+      // Pulses to RX
+      const rxPromises = [];
+      for (let i = 0; i < numCh; i++) {
+        const color = getColor(LAMBDA_VARS[i]);
+        const outIdx = switchMap[i];
+        rxPromises.push(animatePulse(svg, [[L.demux.x + L.demux.w, L.yList[outIdx]], [L.rx.x, L.yList[outIdx]]], color, 300 * state.animationSpeed));
+      }
+      await Promise.all(rxPromises);
+
+      // Light up RX boxes
+      for (let i = 0; i < numCh; i++) {
+        const outIdx = switchMap[i];
+        const els = rxGroups[outIdx].querySelectorAll('rect, text');
+        els.forEach(e => e.setAttribute('opacity', '1'));
+      }
+      await sleep(300);
+
+      // Phase 9: Detection and BER analysis
+      setAnnotation('Phase 9', 'Photodetection: each receiver converts optical signal to electrical. Noise causes some bits to be read incorrectly \u2014 this is the Bit Error Rate (BER).');
+
+      let totalErrors = 0;
+      const berResults = [];
+
+      for (let i = 0; i < numCh; i++) {
+        const result = calcBER(sigPower, fiberLen, spacing, i, numCh);
+        channels[i].ber = result.ber;
+        channels[i].snr = result.snr_dB;
+
+        // For 48-bit visual demo, scale BER so errors are visible on screen
+        // Real BER is shown in stats; demo rate produces a few visible errors
+        const demoRate = Math.min(Math.max(result.ber * 1e8, 0.02), 0.15);
+        channels[i].rxBits = injectErrors(channels[i].txBits, demoRate);
+
+        const errors = channels[i].txBits.reduce((s, b, j) => s + (b !== channels[i].rxBits[j] ? 1 : 0), 0);
+        totalErrors += errors;
+        berResults.push({ ber: result.ber, snr: result.snr_dB, errors });
+
+        document.getElementById(`ch-ber-${i}`).innerHTML = `BER: ${formatBER(result.ber)}`;
+        document.getElementById(`ch-power-${i}`).textContent = `${result.powerAfterEdfa.toFixed(1)} dBm`;
+      }
+
+      // Show bit comparison for channel 1
+      const ch0Errors = channels[0].txBits.map((b, i) => b !== channels[0].rxBits[i]);
+      displayBits('txBits', channels[0].txBits, null);
+      displayBits('rxBits', channels[0].rxBits, ch0Errors);
+
+      const ch0ErrorCount = ch0Errors.filter(Boolean).length;
+      document.getElementById('berBitsTotal').textContent = BITS_PER_CHANNEL;
+      document.getElementById('berErrors').textContent = ch0ErrorCount;
+      document.getElementById('berRate').innerHTML = formatBER(channels[0].ber);
+
+      // Eye diagram
+      drawEyeDiagram(berResults[0].snr);
+      await sleep(300);
+
+      // Phase 10: Summary
+      const avgBer = channels.reduce((s, c) => s + c.ber, 0) / numCh;
+      const avgSnr = channels.reduce((s, c) => s + c.snr, 0) / numCh;
+      const throughput = numCh * CHANNEL_RATE;
+      const quality = avgSnr > 25 ? 'Excellent' : avgSnr > 18 ? 'Good' : avgSnr > 12 ? 'Fair' : 'Poor';
+
+      setAnnotation('Complete', `All ${numCh} channels received. Aggregate throughput: ${throughput} Gbps. Average BER: ${formatBER(avgBer)}. Signal quality: ${quality}.`);
+
+      document.getElementById('statChannels').textContent = numCh;
+      document.getElementById('statBer').innerHTML = formatBER(avgBer);
+      document.getElementById('statThroughput').innerHTML = `${throughput} <span>Gbps</span>`;
+      document.getElementById('statQuality').textContent = quality;
+
+      setStatus('Complete');
+      state.running = false;
+      btn.disabled = false;
+      btn.textContent = 'Start Simulation';
+    }
+
+    // --- Init ---
+    document.getElementById('startBtn').addEventListener('click', runSimulation);
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !state.running) runSimulation();
+    });
+    document.querySelectorAll('input[type="number"]').forEach(input => {
+      input.addEventListener('input', () => {
+        const min = parseInt(input.min) || 0;
+        if (input.value !== '' && parseInt(input.value) < min) input.value = min;
+      });
+    });
+
+    // --- Dynamic legend ---
+    function buildLegend(numCh) {
+      const legend = document.getElementById('legend');
+      legend.innerHTML = '';
+      for (let i = 0; i < numCh; i++) {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        item.innerHTML = `<div class="legend-swatch" style="background:var(--${LAMBDA_VARS[i]})"></div>\u03BB${i + 1}`;
+        legend.appendChild(item);
+      }
+      const noise = document.createElement('div');
+      noise.className = 'legend-item';
+      noise.innerHTML = '<div class="legend-swatch dashed"></div>Noise / ASE';
+      legend.appendChild(noise);
+      const err = document.createElement('div');
+      err.className = 'legend-item';
+      err.innerHTML = '<div class="legend-swatch error-swatch"></div>Bit Error';
+      legend.appendChild(err);
+    }
+
+    // Draw initial topology
+    const initCh = parseInt(document.getElementById('numChannels').value);
+    drawTopology(initCh);
+    buildLegend(initCh);
+    document.getElementById('numChannels').addEventListener('change', () => {
+      const n = parseInt(document.getElementById('numChannels').value);
+      if (!state.running) { drawTopology(n); buildLegend(n); }
+    });
+    drawEyeDiagram(20);
+  </script>
+</body>
+</html>
