@@ -911,7 +911,7 @@
       const receiverX = containerWidth * 0.80;
 
       const totalSimTime = message.length * inputLatency + rtt;
-      const diagramHeight = 700;
+      const diagramHeight = diagram.offsetHeight;
       const padding = 40;
       const pixelsPerMs = (diagramHeight - padding * 2) / totalSimTime;
 
@@ -1031,7 +1031,7 @@
 
       const lastPacket = simPackets[simPackets.length - 1];
       const totalSimTime = lastPacket ? lastPacket.ackTime : message.length * inputLatency + rtt;
-      const diagramHeight = 700;
+      const diagramHeight = diagram.offsetHeight;
       const padding = 40;
       const pixelsPerMs = (diagramHeight - padding * 2) / totalSimTime;
 
@@ -1099,7 +1099,6 @@
 
       // Process simulation using pre-calculated packets
       let packetIdx = 0;
-      let lastInputTime = -1;
 
       for (let i = 0; i < message.length; i++) {
         const char = message[i];
@@ -1148,7 +1147,6 @@
           waitIndicator.classList.remove('visible');
         }
 
-        lastInputTime = inputTime;
 
         // Wait for next character input
         if (i < message.length - 1) {
