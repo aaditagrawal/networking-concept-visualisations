@@ -366,11 +366,11 @@
             </div>
             <div class="ber-stat">
               <div class="ber-stat-value" id="berErrors">0</div>
-              <div class="ber-stat-label">Errors</div>
+              <div class="ber-stat-label">Illustrative errors</div>
             </div>
             <div class="ber-stat">
               <div class="ber-stat-value" id="berRate">--</div>
-              <div class="ber-stat-label">BER</div>
+              <div class="ber-stat-label">Model BER</div>
             </div>
           </div>
         </div>
@@ -908,6 +908,7 @@
 
       const switchMap = buildSwitchMap(numCh);
 
+      buildLegend(numCh);
       buildChannelList(channels);
       document.getElementById('txBits').innerHTML = '';
       document.getElementById('rxBits').innerHTML = '';
@@ -1081,10 +1082,8 @@
       await sleep(300);
 
       // Phase 9: Detection and BER analysis
-      setAnnotation('Phase 9', 'Photodetection: each receiver converts optical signal to electrical. Noise causes some bits to be read incorrectly \u2014 this is the Bit Error Rate (BER).');
+      setAnnotation('Phase 9', 'Errors are exaggerated for this 48-bit illustration; model BER is reported separately. Photodetection: each receiver converts optical signal to electrical. Noise causes some bits to be read incorrectly \u2014 this is the Bit Error Rate (BER).');
 
-      let totalErrors = 0;
-      const berResults = [];
 
       for (let i = 0; i < numCh; i++) {
         const result = calcBER(sigPower, fiberLen, spacing, i, numCh);
@@ -1096,9 +1095,6 @@
         const demoRate = Math.min(Math.max(result.ber * 1e8, 0.02), 0.15);
         channels[i].rxBits = injectErrors(channels[i].txBits, demoRate);
 
-        const errors = channels[i].txBits.reduce((s, b, j) => s + (b !== channels[i].rxBits[j] ? 1 : 0), 0);
-        totalErrors += errors;
-        berResults.push({ ber: result.ber, snr: result.snr_dB, errors });
 
         document.getElementById(`ch-ber-${i}`).innerHTML = `BER: ${formatBER(result.ber)}`;
         document.getElementById(`ch-power-${i}`).textContent = `${result.powerAfterEdfa.toFixed(1)} dBm`;
@@ -1115,7 +1111,7 @@
       document.getElementById('berRate').innerHTML = formatBER(channels[0].ber);
 
       // Eye diagram
-      drawEyeDiagram(berResults[0].snr);
+      drawEyeDiagram(channels[0].snr);
       await sleep(300);
 
       // Phase 10: Summary

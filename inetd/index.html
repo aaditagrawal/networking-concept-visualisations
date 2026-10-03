@@ -549,13 +549,6 @@ daytime  stream  tcp  nowait  root  internal</pre>
     }
 
     // ── Clear ──
-    function clearSvg(id) {
-      const svg = document.getElementById(id);
-      svg.querySelectorAll(':not(defs):not(defs *)').forEach(el => {
-        if (el !== svg) el.remove();
-      });
-      // Re-add defs
-    }
     function clearAll() {
       ['standaloneSvg', 'inetdSvg'].forEach(id => {
         const svg = document.getElementById(id);
