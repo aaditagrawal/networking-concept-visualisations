@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "bunx serve ."
+    "dev": "serve .",
+    "dev:portless": "portless run"
+  },
+  "devDependencies": {
+    "serve": "^14.2.6"
   }
 }
