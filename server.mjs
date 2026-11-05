@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -48,13 +48,15 @@ function message(request, response, status, text, headers = {}) {
 
 async function representation(page, encoding) {
   // Filesystem timestamps can collide across rapid equal-size edits.
-  const source = await readFile(new URL(page, import.meta.url));
-  const revision = createHash('sha256').update(source).digest('hex');
+  // These five bounded local HTML files avoid a thread-pool round trip.
+  const source = readFileSync(new URL(page, import.meta.url));
   let entry = cache.get(page);
-  if (entry?.revision !== revision) {
+  if (!entry || !source.equals(entry.source)) {
+    const revision = createHash('sha256').update(source).digest('hex');
     entry = { revision, source, encoded: new Map() };
     cache.set(page, entry);
   }
+  const revision = entry.revision;
   if (!entry.encoded.has(encoding)) {
     const current = entry;
     const result = Promise.resolve(current.source).then(async source => {
